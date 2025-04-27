@@ -1,0 +1,336 @@
+.tasks-container {
+    padding: 20px;
+  }
+  
+  .tasks-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 24px;
+  }
+  
+  .create-btn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  
+  .search-filter-bar {
+    display: flex;
+    gap: 16px;
+    margin-bottom: 16px;
+  }
+  
+  .search-bar {
+    position: relative;
+    flex: 1;
+  }
+  
+  .search-icon {
+    position: absolute;
+    left: 16px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--text-light);
+    width: 18px;
+    height: 18px;
+  }
+  
+  .search-input {
+    width: 100%;
+    padding: 12px 16px 12px 44px;
+    border: 1px solid #ddd;
+    border-radius: 24px;
+    font-size: 0.875rem;
+  }
+  
+  .search-input:focus {
+    outline: none;
+    border-color: var(--medium-blue);
+    box-shadow: 0 0 0 2px rgba(137, 207, 240, 0.2);
+  }
+  
+  .filter-btn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 16px;
+    background-color: white;
+    border: 1px solid #ddd;
+    border-radius: 24px;
+    cursor: pointer;
+    transition: var(--transition);
+  }
+  
+  .filter-btn:hover {
+    background-color: #f0f0f0;
+  }
+  
+  .filter-panel {
+    display: flex;
+    gap: 16px;
+    padding: 16px;
+    background-color: white;
+    border-radius: var(--border-radius);
+    box-shadow: var(--shadow);
+    margin-bottom: 24px;
+  }
+  
+  .filter-group {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    flex: 1;
+  }
+  
+  .filter-group label {
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: var(--text-light);
+  }
+  
+  .filter-select {
+    padding: 8px 12px;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    font-size: 0.875rem;
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%23666' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 8px center;
+    background-size: 16px;
+    padding-right: 32px;
+  }
+  
+  .filter-select:focus {
+    outline: none;
+    border-color: var(--medium-blue);
+  }
+  
+  .tasks-list {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+  
+  .task-card {
+    display: flex;
+    flex-direction: column;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+  }
+  
+  .task-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 12px rgba(0, 0, 0, 0.08);
+  }
+  
+  .task-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 16px;
+    border-bottom: 1px solid #eee;
+  }
+  
+  .task-project {
+    font-size: 0.75rem;
+  }
+  
+  .project-link {
+    color: var(--dark-blue);
+    font-weight: 500;
+  }
+  
+  .project-link:hover {
+    text-decoration: underline;
+  }
+  
+  .task-status {
+    min-width: 120px;
+  }
+  
+  .status-select {
+    width: 100%;
+    padding: 6px 24px 6px 8px;
+    border-radius: 12px;
+    font-size: 0.75rem;
+    font-weight: 500;
+    border: none;
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%23666' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 4px center;
+    background-size: 12px;
+    cursor: pointer;
+  }
+  
+  .status-select:focus {
+    outline: none;
+  }
+  
+  .status-todo {
+    background-color: #e0e0e0;
+    color: #616161;
+  }
+  
+  .status-inprogress {
+    background-color: #bbdefb;
+    color: #1976d2;
+  }
+  
+  .status-done {
+    background-color: #c8e6c9;
+    color: #388e3c;
+  }
+  
+  .task-content {
+    padding: 16px;
+  }
+  
+  .task-title-link {
+    display: block;
+    margin-bottom: 8px;
+  }
+  
+  .task-title {
+    font-size: 1.125rem;
+    font-weight: 600;
+  }
+  
+  .task-description {
+    color: var(--text-light);
+    font-size: 0.875rem;
+    margin-bottom: 16px;
+  }
+  
+  .task-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+    margin-bottom: 16px;
+  }
+  
+  .meta-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.75rem;
+    color: var(--text-light);
+  }
+  
+  .priority-badge {
+    font-size: 0.75rem;
+    padding: 4px 8px;
+    border-radius: 12px;
+    background-color: #f0f0f0;
+  }
+  
+  .priority-high .priority-badge {
+    background-color: #ffcdd2;
+    color: #c62828;
+  }
+  
+  .priority-medium .priority-badge {
+    background-color: #ffe0b2;
+    color: #ef6c00;
+  }
+  
+  .priority-low .priority-badge {
+    background-color: #dcedc8;
+    color: #558b2f;
+  }
+  
+  .task-actions {
+    display: flex;
+    gap: 8px;
+    padding: 0 16px 16px;
+  }
+  
+  .action-btn {
+    padding: 6px 12px;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: var(--transition);
+    border: none;
+  }
+  
+  .edit-btn {
+    background-color: #f0f0f0;
+    color: var(--text-dark);
+  }
+  
+  .edit-btn:hover {
+    background-color: #e0e0e0;
+  }
+  
+  .delete-btn {
+    background-color: #ffebee;
+    color: #c62828;
+  }
+  
+  .delete-btn:hover {
+    background-color: #ffcdd2;
+  }
+  
+  .empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 60px 20px;
+    color: var(--text-light);
+  }
+  
+  .empty-state svg {
+    color: var(--medium-blue);
+    margin-bottom: 16px;
+  }
+  
+  .empty-state h3 {
+    font-size: 1.25rem;
+    font-weight: 600;
+    margin-bottom: 8px;
+    color: var(--text-dark);
+  }
+  
+  .empty-state p {
+    margin-bottom: 24px;
+    max-width: 400px;
+  }
+  
+  @media (max-width: 768px) {
+    .tasks-header {
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 16px;
+    }
+  
+    .create-btn {
+      width: 100%;
+      justify-content: center;
+    }
+  
+    .search-filter-bar {
+      flex-direction: column;
+      gap: 12px;
+    }
+  
+    .filter-panel {
+      flex-direction: column;
+      gap: 16px;
+    }
+  
+    .task-header {
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 8px;
+    }
+  
+    .task-status {
+      width: 100%;
+    }
+  }
+  

@@ -7,24 +7,32 @@ const { Op } = require('sequelize');
 // @route   GET /api/professional-projects
 // @access  Private
 exports.getProfessionalProjects = asyncHandler(async (req, res, next) => {
+  const userId = req.user.id;
   const projects = await ProfessionalProject.findAll({
     include: [
       {
         model: User,
         as: 'creator',
-        attributes: ['id', 'name', 'email', 'profilePhoto']
-      },
-      {
-        model: Department,
-        attributes: ['id', 'name']
+        attributes: ['id', 'username', 'email']
       },
       {
         model: User,
-        attributes: ['id', 'name', 'email', 'profilePhoto'],
-        through: { attributes: [] } // Don't include join table fields
+        through: { attributes: [] },
+        attributes: ['id', 'username', 'email']
+      },
+      {
+        model: Department,
+        as: 'departments',
+        through: { attributes: [] },
+        attributes: ['id', 'name', 'color']
       }
     ],
-    order: [['createdAt', 'DESC']]
+    where: {
+      [Op.or]: [
+        { creatorId: userId },
+        { '$Users.id$': userId }
+      ]
+    }
   });
   
   res.status(200).json({
@@ -38,44 +46,46 @@ exports.getProfessionalProjects = asyncHandler(async (req, res, next) => {
 // @route   GET /api/professional-projects/:id
 // @access  Private
 exports.getProfessionalProject = asyncHandler(async (req, res, next) => {
-  const project = await ProfessionalProject.findByPk(req.params.id, {
+  const { id } = req.params;
+  const userId = req.user.id;
+
+  const project = await ProfessionalProject.findOne({
+    where: {
+      id,
+      [Op.or]: [
+        { creatorId: userId },
+        { '$Users.id$': userId }
+      ]
+    },
     include: [
       {
         model: User,
         as: 'creator',
-        attributes: ['id', 'name', 'email', 'profilePhoto']
-      },
-      {
-        model: Department,
-        attributes: ['id', 'name']
+        attributes: ['id', 'username', 'email']
       },
       {
         model: User,
-        attributes: ['id', 'name', 'email', 'profilePhoto', 'departmentId'],
-        through: { attributes: [] }
+        through: { attributes: [] },
+        attributes: ['id', 'username', 'email']
       },
       {
-        model: ProfessionalTask,
-        include: [
-          {
-            model: User,
-            as: 'assignedTo',
-            attributes: ['id', 'name', 'email', 'profilePhoto']
-          }
-        ]
+        model: Department,
+        as: 'departments',
+        through: { attributes: [] },
+        attributes: ['id', 'name', 'color']
       }
     ]
   });
   
   if (!project) {
-    return next(new ErrorResponse(`Project not found with id of ${req.params.id}`, 404));
+    return next(new ErrorResponse(`Project not found with id of ${id}`, 404));
   }
   
   // Check if user has access to this project
   const isMember = await ProjectMember.findOne({
     where: {
       userId: req.user.id,
-      projectId: req.params.id
+      projectId: id
     }
   });
   
@@ -95,13 +105,32 @@ exports.getProfessionalProject = asyncHandler(async (req, res, next) => {
 // @route   POST /api/professional-projects
 // @access  Private
 exports.createProfessionalProject = asyncHandler(async (req, res, next) => {
-  // Add creator ID to body
-  req.body.creatorId = req.user.id;
+  const { title, description, startDate, dueDate, status, priority, color, members, departments } = req.body;
+  const creatorId = req.user.id;
   
   const transaction = await sequelize.transaction();
   
   try {
-    const project = await ProfessionalProject.create(req.body, { transaction });
+    const project = await ProfessionalProject.create({
+      title,
+      description,
+      startDate,
+      dueDate,
+      status,
+      priority,
+      color,
+      creatorId
+    }, { transaction });
+    
+    // Add members if specified
+    if (members && Array.isArray(members)) {
+      await project.addUsers(members, { transaction });
+    }
+    
+    // Add departments if specified
+    if (departments && Array.isArray(departments)) {
+      await project.addDepartments(departments, { transaction });
+    }
     
     // Add creator as a project member
     await ProjectMember.create({
@@ -111,12 +140,12 @@ exports.createProfessionalProject = asyncHandler(async (req, res, next) => {
     
     // Add other members if specified
     if (req.body.members && req.body.members.length > 0) {
-      const members = req.body.members.map(userId => ({
+      const membersToAdd = req.body.members.map(userId => ({
         userId,
         projectId: project.id
       }));
       
-      await ProjectMember.bulkCreate(members, { transaction });
+      await ProjectMember.bulkCreate(membersToAdd, { transaction });
     }
     
     await transaction.commit();
@@ -127,16 +156,18 @@ exports.createProfessionalProject = asyncHandler(async (req, res, next) => {
         {
           model: User,
           as: 'creator',
-          attributes: ['id', 'name', 'email']
-        },
-        {
-          model: Department,
-          attributes: ['id', 'name']
+          attributes: ['id', 'username', 'email']
         },
         {
           model: User,
-          attributes: ['id', 'name', 'email'],
-          through: { attributes: [] }
+          through: { attributes: [] },
+          attributes: ['id', 'username', 'email']
+        },
+        {
+          model: Department,
+          as: 'departments',
+          through: { attributes: [] },
+          attributes: ['id', 'name', 'color']
         }
       ]
     });
@@ -155,66 +186,79 @@ exports.createProfessionalProject = asyncHandler(async (req, res, next) => {
 // @route   PUT /api/professional-projects/:id
 // @access  Private
 exports.updateProfessionalProject = asyncHandler(async (req, res, next) => {
-  let project = await ProfessionalProject.findByPk(req.params.id);
-  
-  if (!project) {
-    return next(new ErrorResponse(`Project not found with id of ${req.params.id}`, 404));
-  }
-  
-  // Check if user is creator or admin
-  if (project.creatorId !== req.user.id && req.user.role !== 'admin') {
-    return next(new ErrorResponse(`User not authorized to update this project`, 401));
-  }
+  const { id } = req.params;
+  const userId = req.user.id;
+  const { title, description, startDate, dueDate, status, priority, color, members, departments } = req.body;
   
   const transaction = await sequelize.transaction();
   
   try {
-    // Update project
-    await project.update(req.body, { transaction });
-    
-    // Update project members if specified
-    if (req.body.members && Array.isArray(req.body.members)) {
-      // Remove existing members
-      await ProjectMember.destroy({
-        where: {
-          projectId: project.id,
-          userId: { [Op.ne]: project.creatorId } // Don't remove the creator
-        },
-        transaction
-      });
-      
-      // Add new members
-      if (req.body.members.length > 0) {
-        const members = req.body.members.map(userId => ({
-          userId,
-          projectId: project.id
-        }));
-        
-        await ProjectMember.bulkCreate(members, { 
-          transaction,
-          ignoreDuplicates: true // Avoid duplicate entries
-        });
+    // Check if user has access to the project
+    const project = await ProfessionalProject.findOne({
+      where: {
+        id,
+        [Op.or]: [
+          { creatorId: userId },
+          { '$Users.id$': userId }
+        ]
+      },
+      include: [
+        {
+          model: User,
+          through: { attributes: [] }
+        }
+      ]
+    });
+
+    if (!project) {
+      return next(new ErrorResponse(`Project not found with id of ${id}`, 404));
+    }
+
+    // Only creator can update project details
+    if (project.creatorId === userId) {
+      await project.update({
+        title,
+        description,
+        startDate,
+        dueDate,
+        status,
+        priority,
+        color
+      }, { transaction });
+
+      // Update members if specified
+      if (members && Array.isArray(members)) {
+        await project.setUsers([userId, ...members], { transaction });
       }
+
+      // Update departments if specified
+      if (departments && Array.isArray(departments)) {
+        await project.setDepartments(departments, { transaction });
+      }
+    } else {
+      return next(new ErrorResponse(`User not authorized to update this project`, 401));
     }
     
     await transaction.commit();
     
     // Fetch updated project with relationships
-    const updatedProject = await ProfessionalProject.findByPk(project.id, {
+    const updatedProject = await ProfessionalProject.findByPk(id, {
       include: [
         {
           model: User,
           as: 'creator',
-          attributes: ['id', 'name', 'email']
-        },
-        {
-          model: Department,
-          attributes: ['id', 'name']
+          attributes: ['id', 'username', 'email']
         },
         {
           model: User,
-          attributes: ['id', 'name', 'email'],
-          through: { attributes: [] }
+          through: { attributes: [] },
+          attributes: ['id', 'username', 'email']
+        },
+        {
+          model: Department,
+          as: 'departments',
+          through: { attributes: [] },
+          attributes: ['id', 'name', 'color']
         }
       ]
     });
@@ -233,10 +277,18 @@ exports.updateProfessionalProject = asyncHandler(async (req, res, next) => {
 // @route   DELETE /api/professional-projects/:id
 // @access  Private
 exports.deleteProfessionalProject = asyncHandler(async (req, res, next) => {
-  const project = await ProfessionalProject.findByPk(req.params.id);
+  const { id } = req.params;
+  const userId = req.user.id;
+  
+  const project = await ProfessionalProject.findOne({
+    where: {
+      id,
+      creatorId: userId
+    }
+  });
   
   if (!project) {
-    return next(new ErrorResponse(`Project not found with id of ${req.params.id}`, 404));
+    return next(new ErrorResponse(`Project not found with id of ${id}`, 404));
   }
   
   // Check if user is creator or admin
@@ -249,13 +301,13 @@ exports.deleteProfessionalProject = asyncHandler(async (req, res, next) => {
   try {
     // Delete all related tasks
     await ProfessionalTask.destroy({
-      where: { projectId: project.id },
+      where: { projectId: id },
       transaction
     });
     
     // Delete all project members
     await ProjectMember.destroy({
-      where: { projectId: project.id },
+      where: { projectId: id },
       transaction
     });
     

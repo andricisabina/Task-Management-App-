@@ -211,6 +211,47 @@ const {
       }]
     });
     
+    // --- Unified allTasks array ---
+    // Fetch all personal tasks
+    const allPersonalTasks = await PersonalTask.findAll({
+      where: { userId: req.user.id, status: { [Op.notIn]: ['completed', 'cancelled'] } },
+      include: [{ model: PersonalProject, attributes: ['id', 'title', 'color'] }]
+    });
+    // Fetch all professional tasks
+    const allProfessionalTasks = await ProfessionalTask.findAll({
+      where: { assignedToId: req.user.id, status: { [Op.notIn]: ['completed', 'cancelled', 'rejected'] } },
+      include: [{ model: ProfessionalProject, attributes: ['id', 'title', 'color'] }]
+    });
+    // Map and merge tasks
+    const mappedPersonal = allPersonalTasks.map(task => ({
+      id: task.id,
+      title: task.title,
+      dueDate: task.dueDate,
+      priority: task.priority,
+      project: task.PersonalProject ? { id: task.PersonalProject.id, title: task.PersonalProject.title, color: task.PersonalProject.color } : null,
+      type: 'personal',
+      status: task.status
+    }));
+    const mappedProfessional = allProfessionalTasks.map(task => ({
+      id: task.id,
+      title: task.title,
+      dueDate: task.dueDate,
+      priority: task.priority,
+      project: task.ProfessionalProject ? { id: task.ProfessionalProject.id, title: task.ProfessionalProject.title, color: task.ProfessionalProject.color } : null,
+      type: 'professional',
+      status: task.status
+    }));
+    // Priority order for sorting
+    const priorityOrder = { urgent: 3, high: 2, medium: 1, low: 0 };
+    // Sort by dueDate (asc), then by priority (desc)
+    const allTasks = [...mappedPersonal, ...mappedProfessional].sort((a, b) => {
+      if (a.dueDate && b.dueDate) {
+        const dateDiff = new Date(a.dueDate) - new Date(b.dueDate);
+        if (dateDiff !== 0) return dateDiff;
+      }
+      return (priorityOrder[b.priority] || 0) - (priorityOrder[a.priority] || 0);
+    });
+    
     res.status(200).json({
       success: true,
       data: {
@@ -255,7 +296,8 @@ const {
         recentActivity: {
           personal: recentPersonalTasks,
           professional: recentProfessionalTasks
-        }
+        },
+        allTasks
       }
     });
   });

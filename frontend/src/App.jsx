@@ -1,34 +1,49 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from '/vite.svg'
-import './App.css'
+import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom"
+import Login from "./pages/auth/Login"
+import Register from "./pages/auth/Register"
+import Dashboard from "./pages/dashboard/Dashboard"
+import UserProfile from "./pages/profile/Userprofile"
+import PersonalProjects from "./pages/projects/PersonalProjects"
+import ProfessionalProjects from "./pages/projects/ProfessionalProjects"
+import PersonalTasks from "./pages/tasks/PersonalTasks"
+import ProjectDetails from "./pages/projects/ProjectDetails"
+import TaskDetails from "./pages/tasks/TaskDetails"
+import Calendar from "./pages/calendar/Calendar"
+import Layout from "./components/layout/Layout"
+import ProtectedRoute from "./components/auth/ProtectedRoute"
+import { AuthProvider } from "./context/AuthContext"
+import { ToastContainer } from "react-toastify"
+import "react-toastify/dist/ReactToastify.css"
+import "./App.css"
 
 function App() {
-  const [count, setCount] = useState(0)
-
   return (
-    <>
-      <div>
-        <a href="https://vite.dev" target="_blank">
-          <img src={viteLogo} className="logo" alt="Vite logo" />
-        </a>
-        <a href="https://react.dev" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
-      </div>
-      <h1>Vite + React</h1>
-      <div className="card">
-        <button onClick={() => setCount((count) => count + 1)}>
-          count is {count}
-        </button>
-        <p>
-          Edit <code>src/App.jsx</code> and save to test HMR
-        </p>
-      </div>
-      <p className="read-the-docs">
-        Click on the Vite and React logos to learn more
-      </p>
-    </>
+    <AuthProvider>
+      <Router>
+        <ToastContainer position="top-right" autoClose={3000} />
+        <Routes>
+          <Route path="/login" element={<Login />} />
+          <Route path="/register" element={<Register />} />
+          <Route
+            element={
+              <ProtectedRoute>
+                <Layout />
+              </ProtectedRoute>
+            }
+          >
+            <Route path="/" element={<Dashboard />} />
+            <Route path="/profile" element={<UserProfile />} />
+            <Route path="/personal-projects" element={<PersonalProjects />} />
+            <Route path="/professional-projects" element={<ProfessionalProjects />} />
+            <Route path="/tasks" element={<PersonalTasks />} />
+            <Route path="/projects/:projectId" element={<ProjectDetails />} />
+            <Route path="/tasks/:taskId" element={<TaskDetails />} />
+            <Route path="/calendar" element={<Calendar />} />
+          </Route>
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </Router>
+    </AuthProvider>
   )
 }
 

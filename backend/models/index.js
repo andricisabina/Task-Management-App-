@@ -47,14 +47,41 @@ ProfessionalTask.hasMany(Attachment, { foreignKey: 'taskId' });
 Attachment.belongsTo(ProfessionalTask, { foreignKey: 'taskId' });
 
 // Many-to-many relationship between Users and ProfessionalProjects
-// through ProjectMembers model (defined virtually here using through)
-const ProjectMember = sequelize.define('ProjectMember', {}, { timestamps: true });
-User.belongsToMany(ProfessionalProject, { through: ProjectMember, foreignKey: 'userId' });
-ProfessionalProject.belongsToMany(User, { through: ProjectMember, foreignKey: 'projectId' });
+const ProjectMember = sequelize.define('ProjectMember', {}, { 
+  timestamps: true,
+  tableName: 'ProjectMembers'
+});
 
-// Department relationship with ProfessionalProjects
-Department.hasMany(ProfessionalProject, { foreignKey: 'departmentId' });
-ProfessionalProject.belongsTo(Department, { foreignKey: 'departmentId' });
+User.belongsToMany(ProfessionalProject, { 
+  through: ProjectMember,
+  foreignKey: 'userId',
+  otherKey: 'projectId'
+});
+
+ProfessionalProject.belongsToMany(User, { 
+  through: ProjectMember,
+  foreignKey: 'projectId',
+  otherKey: 'userId'
+});
+
+// Many-to-many relationship between Departments and ProfessionalProjects
+const ProjectDepartment = sequelize.define('ProjectDepartment', {}, { 
+  timestamps: true,
+  tableName: 'ProjectDepartments'
+});
+
+Department.belongsToMany(ProfessionalProject, { 
+  through: ProjectDepartment,
+  foreignKey: 'departmentId',
+  otherKey: 'projectId'
+});
+
+ProfessionalProject.belongsToMany(Department, { 
+  through: ProjectDepartment,
+  as: 'departments',
+  foreignKey: 'projectId',
+  otherKey: 'departmentId'
+});
 
 // Export models and sequelize instance
 module.exports = {
@@ -68,5 +95,6 @@ module.exports = {
   Comment,
   Attachment,
   Notification,
-  ProjectMember
+  ProjectMember,
+  ProjectDepartment
 };

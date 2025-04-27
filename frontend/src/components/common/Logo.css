@@ -1,0 +1,35 @@
+.logo {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+  }
+  
+  .logo-icon {
+    color: #000;
+  }
+  
+  .logo-text {
+    font-weight: 700;
+    font-size: 1.5rem;
+    color: #000;
+  }
+  
+  .logo.small .logo-icon {
+    width: 18px;
+    height: 18px;
+  }
+  
+  .logo.small .logo-text {
+    font-size: 1rem;
+  }
+  
+  .logo.large .logo-icon {
+    width: 32px;
+    height: 32px;
+  }
+  
+  .logo.large .logo-text {
+    font-size: 2rem;
+  }
+  
