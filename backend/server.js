@@ -1,7 +1,7 @@
 const express = require('express');
 const cors = require('cors');
-const morgan = require('morgan');
 const path = require('path');
+const morgan = require('morgan');
 const dotenv = require('dotenv');
 const { sequelize } = require('./models');
 const errorHandler = require('./middleware/errorMiddleware');

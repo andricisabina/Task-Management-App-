@@ -1,6 +1,7 @@
 const { Sequelize } = require('sequelize');
 const dotenv = require('dotenv');
 
+
 dotenv.config();
 
 // Database configuration
@@ -25,5 +26,11 @@ const sequelize = new Sequelize(
     }
   }
 );
+console.log("Loaded env:", {
+  DB_HOST: process.env.DB_HOST,
+  DB_USER: process.env.DB_USER,
+  DB_PASSWORD: process.env.DB_PASSWORD,
+  DB_NAME: process.env.DB_NAME
+});
 
 module.exports = sequelize;
