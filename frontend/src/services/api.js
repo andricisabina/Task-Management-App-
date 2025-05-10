@@ -39,6 +39,7 @@ export const projectsApi = {
   createPersonalProject: (data) => api.post('/personal-projects', data),
   updatePersonalProject: (id, data) => api.put(`/personal-projects/${id}`, data),
   deletePersonalProject: (id) => api.delete(`/personal-projects/${id}`),
+  getPersonalProjectStats: (id) => api.get(`/personal-projects/${id}/stats`),
 
   // Professional Projects
   getProfessionalProjects: () => api.get('/professional-projects'),
@@ -51,7 +52,7 @@ export const projectsApi = {
 // Tasks API
 export const tasksApi = {
   // Personal Tasks
-  getPersonalTasks: () => api.get('/personal-tasks'),
+  getPersonalTasks: (params) => api.get('/personal-tasks', { params }),
   getPersonalTask: (id) => api.get(`/personal-tasks/${id}`),
   createPersonalTask: (data) => api.post('/personal-tasks', data),
   updatePersonalTask: (id, data) => api.put(`/personal-tasks/${id}`, data),

@@ -5,10 +5,11 @@ import { useParams, Link, useNavigate } from "react-router-dom"
 import { ArrowLeft, Calendar, Clock, Users, Paperclip, MessageSquare, Send } from "react-feather"
 import { toast } from "react-toastify"
 import TaskModal from "../../components/tasks/TaskModal"
+import { tasksApi } from "../../services/api"
 import "./TaskDetails.css"
 
 const TaskDetails = () => {
-  const { taskId } = useParams()
+  const { type, taskId } = useParams()
   const navigate = useNavigate()
   const [task, setTask] = useState(null)
   const [comments, setComments] = useState([])
@@ -17,57 +18,27 @@ const TaskDetails = () => {
   const [isModalOpen, setIsModalOpen] = useState(false)
 
   useEffect(() => {
-    // Simulating data fetching
-    const fetchTaskDetails = () => {
-      // This would be API calls in a real application
-      setTimeout(() => {
-        const mockTask = {
-          id: Number.parseInt(taskId),
-          title: "Design homepage mockup",
-          description:
-            "Create a mockup for the homepage using Figma. Include mobile and desktop versions. Make sure to follow the brand guidelines and use the approved color palette.",
-          status: "in-progress",
-          priority: "high",
-          dueDate: "2023-04-15",
-          createdAt: "2023-04-01",
-          projectId: 1,
-          projectTitle: "Website Redesign",
-          assignedTo: "Sarah M.",
-          attachments: [
-            { id: 1, name: "design-brief.pdf", size: "1.2 MB" },
-            { id: 2, name: "color-palette.png", size: "245 KB" },
-          ],
+    const fetchTaskDetails = async () => {
+      setIsLoading(true)
+      try {
+        let response
+        if (type === 'professional') {
+          response = await tasksApi.getProfessionalTask(taskId)
+        } else {
+          response = await tasksApi.getPersonalTask(taskId)
         }
-
-        const mockComments = [
-          {
-            id: 1,
-            author: "John D.",
-            content: "I've added some reference designs to the shared folder. Please take a look.",
-            timestamp: "2023-04-05T10:30:00",
-          },
-          {
-            id: 2,
-            author: "Sarah M.",
-            content: "Thanks, I'll check them out. I'm planning to have the first draft ready by tomorrow.",
-            timestamp: "2023-04-05T11:15:00",
-          },
-          {
-            id: 3,
-            author: "Alex K.",
-            content: "Don't forget to include the new logo in the header section.",
-            timestamp: "2023-04-06T09:45:00",
-          },
-        ]
-
-        setTask(mockTask)
-        setComments(mockComments)
+        setTask(response.data)
+        setComments([])
+      } catch (err) {
+        setTask(null)
+        setComments([])
+        toast.error(err.message)
+      } finally {
         setIsLoading(false)
-      }, 500)
+      }
     }
-
     fetchTaskDetails()
-  }, [taskId])
+  }, [type, taskId])
 
   const handleStatusChange = (e) => {
     const newStatus = e.target.value
@@ -244,42 +215,45 @@ const TaskDetails = () => {
         )}
       </div>
 
-      <div className="task-comments card">
-        <h3 className="comments-title">
-          <MessageSquare size={18} /> Comments
-        </h3>
+      {/* Only show comments for professional tasks */}
+      {type === 'professional' && (
+        <div className="task-comments card">
+          <h3 className="comments-title">
+            <MessageSquare size={18} /> Comments
+          </h3>
 
-        <div className="comments-list">
-          {comments.length > 0 ? (
-            comments.map((comment) => (
-              <div key={comment.id} className="comment-item">
-                <div className="comment-header">
-                  <span className="comment-author">{comment.author}</span>
-                  <span className="comment-time">
-                    {formatDate(comment.timestamp)} at {formatTime(comment.timestamp)}
-                  </span>
+          <div className="comments-list">
+            {comments.length > 0 ? (
+              comments.map((comment) => (
+                <div key={comment.id} className="comment-item">
+                  <div className="comment-header">
+                    <span className="comment-author">{comment.author}</span>
+                    <span className="comment-time">
+                      {formatDate(comment.timestamp)} at {formatTime(comment.timestamp)}
+                    </span>
+                  </div>
+                  <p className="comment-content">{comment.content}</p>
                 </div>
-                <p className="comment-content">{comment.content}</p>
-              </div>
-            ))
-          ) : (
-            <div className="no-comments">No comments yet</div>
-          )}
-        </div>
+              ))
+            ) : (
+              <div className="no-comments">No comments yet</div>
+            )}
+          </div>
 
-        <form onSubmit={handleSubmitComment} className="comment-form">
-          <textarea
-            placeholder="Add a comment..."
-            value={newComment}
-            onChange={handleCommentChange}
-            className="comment-input"
-            rows="3"
-          ></textarea>
-          <button type="submit" className="btn btn-primary comment-submit" disabled={!newComment.trim()}>
-            <Send size={16} /> Send
-          </button>
-        </form>
-      </div>
+          <form onSubmit={handleSubmitComment} className="comment-form">
+            <textarea
+              placeholder="Add a comment..."
+              value={newComment}
+              onChange={handleCommentChange}
+              className="comment-input"
+              rows="3"
+            ></textarea>
+            <button type="submit" className="btn btn-primary comment-submit" disabled={!newComment.trim()}>
+              <Send size={16} /> Send
+            </button>
+          </form>
+        </div>
+      )}
 
       {isModalOpen && (
         <TaskModal

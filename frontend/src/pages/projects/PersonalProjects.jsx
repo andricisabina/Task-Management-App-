@@ -20,11 +20,45 @@ const PersonalProjects = () => {
     fetchProjects()
   }, [])
 
+  useEffect(() => {
+    const handleFocus = () => {
+      fetchProjects();
+    };
+    window.addEventListener('focus', handleFocus);
+    return () => {
+      window.removeEventListener('focus', handleFocus);
+    };
+  }, []);
+
   const fetchProjects = async () => {
     try {
       setIsLoading(true)
       const response = await projectsApi.getPersonalProjects()
-      setProjects(response.data)
+      const projects = response.data
+
+      // Fetch stats for each project in parallel
+      const projectsWithStats = await Promise.all(
+        projects.map(async (project) => {
+          try {
+            const statsRes = await projectsApi.getPersonalProjectStats(project.id)
+            const taskCounts = statsRes.data.taskCounts || []
+            const completedTasks = parseInt(taskCounts.find(t => t.status === "completed")?.count || 0)
+            const tasksCount = taskCounts.reduce((sum, t) => sum + parseInt(t.count), 0)
+            const completionRate = tasksCount > 0 ? Math.round((completedTasks / tasksCount) * 100) : 0
+            return {
+              ...project,
+              completionRate,
+              completedTasks,
+              tasksCount,
+            }
+          } catch {
+            // If stats fail, fallback to project as is
+            return { ...project, completionRate: 0, completedTasks: 0, tasksCount: 0 }
+          }
+        })
+      )
+
+      setProjects(projectsWithStats)
       setError(null)
     } catch (err) {
       setError(err.message)

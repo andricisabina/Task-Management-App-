@@ -7,39 +7,44 @@ const { Op } = require('sequelize');
 // @route   GET /api/professional-projects
 // @access  Private
 exports.getProfessionalProjects = asyncHandler(async (req, res, next) => {
-  const userId = req.user.id;
-  const projects = await ProfessionalProject.findAll({
-    include: [
-      {
-        model: User,
-        as: 'creator',
-        attributes: ['id', 'username', 'email']
-      },
-      {
-        model: User,
-        through: { attributes: [] },
-        attributes: ['id', 'username', 'email']
-      },
-      {
-        model: Department,
-        as: 'departments',
-        through: { attributes: [] },
-        attributes: ['id', 'name', 'color']
+  try {
+    const userId = req.user.id;
+    const projects = await ProfessionalProject.findAll({
+      include: [
+        {
+          model: User,
+          as: 'creator',
+          attributes: ['id', 'username', 'email']
+        },
+        {
+          model: User,
+          through: { attributes: [] },
+          attributes: ['id', 'username', 'email']
+        },
+        {
+          model: Department,
+          as: 'departments',
+          through: { attributes: [] },
+          attributes: ['id', 'name', 'color']
+        }
+      ],
+      where: {
+        [Op.or]: [
+          { creatorId: userId },
+          { '$Users.id$': userId }
+        ]
       }
-    ],
-    where: {
-      [Op.or]: [
-        { creatorId: userId },
-        { '$Users.id$': userId }
-      ]
-    }
-  });
-  
-  res.status(200).json({
-    success: true,
-    count: projects.length,
-    data: projects
-  });
+    });
+
+    res.status(200).json({
+      success: true,
+      count: projects.length,
+      data: projects
+    });
+  } catch (err) {
+    console.error('Error in getProfessionalProjects:', err);
+    return next(new ErrorResponse('Failed to fetch professional projects', 500));
+  }
 });
 
 // @desc    Get single professional project
@@ -73,6 +78,10 @@ exports.getProfessionalProject = asyncHandler(async (req, res, next) => {
         as: 'departments',
         through: { attributes: [] },
         attributes: ['id', 'name', 'color']
+      },
+      {
+        model: ProfessionalTask,
+        order: [['dueDate', 'ASC']]
       }
     ]
   });

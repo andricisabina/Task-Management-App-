@@ -1,6 +1,7 @@
-const { PersonalProject, PersonalTask } = require('../models');
+const { PersonalProject, PersonalTask, sequelize } = require('../models');
 const asyncHandler = require('../middleware/asyncHandler');
 const ErrorResponse = require('../utils/errorResponse');
+const { Op } = require('sequelize');
 
 // @desc    Get all personal projects for a user
 // @route   GET /api/personal-projects

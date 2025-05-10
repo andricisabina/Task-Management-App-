@@ -140,7 +140,7 @@ const PersonalTasks = () => {
 
   const fetchTasks = async () => {
     try {
-      const response = await tasksApi.getPersonalTasks()
+      const response = await tasksApi.getPersonalTasks({ showStandalone: true })
       setTasks(response.data)
     } catch (err) {
       toast.error(err.message)
@@ -176,6 +176,29 @@ const PersonalTasks = () => {
     return matchesSearch && matchesStatus && matchesPriority
   })
 
+  // Normalize status for sorting
+  const normalizeStatus = (status) => {
+    if (!status) return '';
+    return status.toLowerCase().replace(/\s|_/g, '-');
+  };
+
+  const statusOrder = {
+    'todo': 1,
+    'to-do': 1,
+    'to do': 1,
+    'in-progress': 2,
+    'in progress': 2,
+    'on-hold': 3,
+    'on hold': 3,
+    'cancelled': 4,
+    'completed': 5,
+    'done': 5
+  };
+
+  const sortedTasks = filteredTasks.slice().sort((a, b) => {
+    return (statusOrder[normalizeStatus(a.status)] || 99) - (statusOrder[normalizeStatus(b.status)] || 99);
+  });
+
   const handleCreateTask = () => {
     setCurrentTask(null)
     setIsModalOpen(true)
@@ -203,9 +226,16 @@ const PersonalTasks = () => {
         setTasks(tasks.map((task) => (task.id === currentTask.id ? response.data : task)))
         toast.success("Task updated successfully")
       } else {
-        const response = await tasksApi.createPersonalTask(taskData)
-        setTasks([response.data, ...tasks])
-        toast.success("Task created successfully")
+        // Only create a standalone task if no projectId is provided
+        if (!taskData.projectId) {
+          const response = await tasksApi.createPersonalTask(taskData)
+          setTasks([response.data, ...tasks])
+          toast.success("Task created successfully")
+        } else {
+          // If projectId is provided, don't add it to the tasks list since it belongs to a project
+          await tasksApi.createPersonalTask(taskData)
+          toast.success("Task created successfully in project")
+        }
       }
       setIsModalOpen(false)
     } catch (err) {
@@ -282,9 +312,9 @@ const PersonalTasks = () => {
         </div>
       )}
 
-      {filteredTasks.length > 0 ? (
+      {sortedTasks.length > 0 ? (
         <div className="tasks-list">
-          {filteredTasks.map((task) => (
+          {sortedTasks.map((task) => (
             <div key={task.id} className={`task-card card priority-${task.priority}`} style={{ display: 'flex', flexDirection: 'column', padding: 24, marginBottom: 16, borderRadius: 12, boxShadow: '0 2px 8px rgba(0,0,0,0.04)', background: '#fff', position: 'relative', overflow: 'visible' }}>
               <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 8 }}>
                 <span style={{ fontSize: '1.5rem', fontWeight: 700, color: '#222', flex: 1 }}>{task.title}</span>
@@ -294,6 +324,11 @@ const PersonalTasks = () => {
                 <span style={{ color: '#888', fontSize: '0.95rem' }}>
                   Due: {task.dueDate ? new Date(task.dueDate).toLocaleString() : 'N/A'}
                 </span>
+                {task.PersonalProject && (
+                  <Link to={`/personal-projects/${task.PersonalProject.id}`} style={{ color: task.PersonalProject.color || '#1890ff', fontSize: '0.95rem', textDecoration: 'none' }}>
+                    Project: {task.PersonalProject.title}
+                  </Link>
+                )}
               </div>
               <div style={{ color: '#555', fontSize: '1rem', marginBottom: 8, maxWidth: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                 {task.description}

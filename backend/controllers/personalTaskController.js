@@ -8,13 +8,25 @@ const { Op } = require('sequelize');
 // @access  Private
 exports.getPersonalTasks = asyncHandler(async (req, res, next) => {
   let query = {
-    where: { userId: req.user.id },
+    where: { 
+      userId: req.user.id
+    },
     include: [{
       model: PersonalProject,
       attributes: ['id', 'title', 'color']
     }],
     order: [['createdAt', 'DESC']]
   };
+
+  // If projectId is provided, show tasks for that project
+  if (req.query.projectId) {
+    query.where.projectId = req.query.projectId;
+  }
+
+  // If showStandalone is true, only show standalone tasks
+  if (req.query.showStandalone === 'true') {
+    query.where.projectId = null;
+  }
 
   // Filter by status if provided
   if (req.query.status) {
@@ -24,16 +36,6 @@ exports.getPersonalTasks = asyncHandler(async (req, res, next) => {
   // Filter by priority if provided
   if (req.query.priority) {
     query.where.priority = req.query.priority;
-  }
-
-  // Filter by project if provided
-  if (req.query.projectId) {
-    query.where.projectId = req.query.projectId;
-  }
-
-  // Filter standalone tasks
-  if (req.query.standalone === 'true') {
-    query.where.projectId = null;
   }
 
   // Filter by due date range

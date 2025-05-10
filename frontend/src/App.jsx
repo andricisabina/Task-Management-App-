@@ -37,7 +37,7 @@ function App() {
             <Route path="/professional-projects" element={<ProfessionalProjects />} />
             <Route path="/tasks" element={<PersonalTasks />} />
             <Route path="/projects/:projectId" element={<ProjectDetails />} />
-            <Route path="/tasks/:taskId" element={<TaskDetails />} />
+            <Route path="/tasks/:type/:taskId" element={<TaskDetails />} />
             <Route path="/calendar" element={<Calendar />} />
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />

@@ -74,27 +74,26 @@ const Dashboard = () => {
           <div className="card today-tasks">
             <div className="card-header">
               <h2 className="card-title">Today's Tasks</h2>
-              <Link to="/tasks" className="view-all">
-                View All Tasks
-              </Link>
             </div>
             {summary.todayTasks.length > 0 ? (
               <ul className="task-list">
                 {summary.todayTasks.map((task) => (
                   <li key={task.id} className="task-item">
-                    <div className="task-info">
-                      <span className="task-title">{task.title}</span>
-                      <span className={`task-priority ${task.priority}`}>{task.priority}</span>
-                    </div>
-                    <div className="task-status">
-                      {task.status === "done" ? (
-                        <CheckCircle size={16} className="status-icon done" />
-                      ) : task.status === "inprogress" ? (
-                        <Clock size={16} className="status-icon inprogress" />
-                      ) : (
-                        <AlertCircle size={16} className="status-icon todo" />
-                      )}
-                    </div>
+                    <Link to={`/tasks/${task.type || (task.assignedToId ? 'professional' : 'personal')}/${task.id}`} style={{ textDecoration: 'none', color: 'inherit' }}>
+                      <div className="task-info">
+                        <span className="task-title">{task.title}</span>
+                        <span className={`task-priority ${task.priority}`}>{task.priority}</span>
+                      </div>
+                      <div className="task-status">
+                        {task.status === "done" ? (
+                          <CheckCircle size={16} className="status-icon done" />
+                        ) : task.status === "inprogress" ? (
+                          <Clock size={16} className="status-icon inprogress" />
+                        ) : (
+                          <AlertCircle size={16} className="status-icon todo" />
+                        )}
+                      </div>
+                    </Link>
                   </li>
                 ))}
               </ul>
@@ -108,24 +107,23 @@ const Dashboard = () => {
           <div className="card overdue-tasks">
             <div className="card-header">
               <h2 className="card-title">Overdue Tasks</h2>
-              <Link to="/tasks" className="view-all">
-                View All Tasks
-              </Link>
             </div>
             {summary.overdueTasks.length > 0 ? (
               <ul className="task-list">
                 {summary.overdueTasks.map((task) => (
                   <li key={task.id} className="task-item">
-                    <div className="task-info">
-                      <span className="task-title">{task.title}</span>
-                      <span className={`task-priority ${task.priority}`}>{task.priority}</span>
-                    </div>
-                    <div className="task-status">
-                      <Calendar size={14} />
-                      <span className="due-date">
-                        Due {new Date(task.dueDate).toLocaleDateString()}
-                      </span>
-                    </div>
+                    <Link to={`/tasks/${task.type || (task.assignedToId ? 'professional' : 'personal')}/${task.id}`} style={{ textDecoration: 'none', color: 'inherit' }}>
+                      <div className="task-info">
+                        <span className="task-title">{task.title}</span>
+                        <span className={`task-priority ${task.priority}`}>{task.priority}</span>
+                      </div>
+                      <div className="task-status">
+                        <Calendar size={14} />
+                        <span className="due-date">
+                          Due {new Date(task.dueDate).toLocaleDateString()}
+                        </span>
+                      </div>
+                    </Link>
                   </li>
                 ))}
               </ul>
@@ -144,24 +142,26 @@ const Dashboard = () => {
               <ul className="task-list">
                 {allTasks.map((task) => (
                   <li key={task.type + '-' + task.id} className="task-item">
-                    <div className="task-info">
-                      <span className="task-title">{task.title}</span>
-                      <span className={`task-priority ${task.priority}`}>{task.priority}</span>
-                      {task.project && (
-                        <span className="task-project" style={{ color: task.project.color || '#888', marginLeft: 8 }}>
-                          {task.project.title}
+                    <Link to={`/tasks/${task.type || (task.assignedToId ? 'professional' : 'personal')}/${task.id}`} style={{ textDecoration: 'none', color: 'inherit' }}>
+                      <div className="task-info">
+                        <span className="task-title">{task.title}</span>
+                        <span className={`task-priority ${task.priority}`}>{task.priority}</span>
+                        {task.project && (
+                          <span className="task-project" style={{ color: task.project.color || '#888', marginLeft: 8 }}>
+                            {task.project.title}
+                          </span>
+                        )}
+                      </div>
+                      <div className="task-status">
+                        <Calendar size={14} />
+                        <span className="due-date">
+                          Due {task.dueDate ? new Date(task.dueDate).toLocaleDateString() : 'N/A'}
                         </span>
-                      )}
-                    </div>
-                    <div className="task-status">
-                      <Calendar size={14} />
-                      <span className="due-date">
-                        Due {task.dueDate ? new Date(task.dueDate).toLocaleDateString() : 'N/A'}
-                      </span>
-                      <span className="task-type" style={{ marginLeft: 8, fontStyle: 'italic', color: '#888' }}>
-                        {task.type === 'personal' ? 'Personal' : 'Professional'}
-                      </span>
-                    </div>
+                        <span className="task-type" style={{ marginLeft: 8, fontStyle: 'italic', color: '#888' }}>
+                          {task.type === 'personal' ? 'Personal' : 'Professional'}
+                        </span>
+                      </div>
+                    </Link>
                   </li>
                 ))}
               </ul>
