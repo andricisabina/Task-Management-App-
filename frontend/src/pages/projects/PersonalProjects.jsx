@@ -178,7 +178,7 @@ const PersonalProjects = () => {
                   </div>
                 </div>
               </div>
-              <Link to={`/projects/${project.id}`} className="project-card-content">
+              <Link to={`/projects/personal/${project.id}`} className="project-card-content">
                 <h3 className="project-title">{project.title}</h3>
                 <p className="project-description">{project.description}</p>
                 <div className="project-stats">

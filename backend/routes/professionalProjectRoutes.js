@@ -8,7 +8,11 @@ const {
   deleteProfessionalProject,
   addProjectMember,
   removeProjectMember,
-  getProjectStats
+  getProjectStats,
+  getProjectComments,
+  addProjectComment,
+  editProjectComment,
+  deleteProjectComment
 } = require('../controllers/professionalProjectController');
 const { protect } = require('../middleware/authMiddleware');
 
@@ -30,5 +34,13 @@ router.route('/:id/members/:userId')
   .delete(removeProjectMember);
 
 router.get('/:id/stats', getProjectStats);
+
+router.route('/:id/comments')
+  .get(getProjectComments)
+  .post(addProjectComment);
+
+router.route('/:id/comments/:commentId')
+  .put(editProjectComment)
+  .delete(deleteProjectComment);
 
 module.exports = router;

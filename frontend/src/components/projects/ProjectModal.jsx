@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react"
 import { X } from "react-feather"
 import "./ProjectModal.css"
+import { departmentsApi } from '../../services/api';
 
 const ProjectModal = ({ project, isProfessional = false, onClose, onSave }) => {
   const [formData, setFormData] = useState({
@@ -10,6 +11,9 @@ const ProjectModal = ({ project, isProfessional = false, onClose, onSave }) => {
     description: "",
     team: "",
   })
+  const [departments, setDepartments] = useState([]);
+  const [selectedDepartments, setSelectedDepartments] = useState([]);
+  const [leaderEmails, setLeaderEmails] = useState({});
 
   useEffect(() => {
     if (project) {
@@ -21,6 +25,14 @@ const ProjectModal = ({ project, isProfessional = false, onClose, onSave }) => {
     }
   }, [project])
 
+  useEffect(() => {
+    if (isProfessional) {
+      departmentsApi.getDepartments().then((res) => {
+        setDepartments(res.data);
+      });
+    }
+  }, [isProfessional]);
+
   const handleChange = (e) => {
     const { name, value } = e.target
     setFormData({
@@ -28,6 +40,18 @@ const ProjectModal = ({ project, isProfessional = false, onClose, onSave }) => {
       [name]: value,
     })
   }
+
+  const handleDepartmentChange = (deptId) => {
+    setSelectedDepartments((prev) =>
+      prev.includes(deptId)
+        ? prev.filter((id) => id !== deptId)
+        : [...prev, deptId]
+    );
+  };
+
+  const handleLeaderEmailChange = (deptId, value) => {
+    setLeaderEmails((prev) => ({ ...prev, [deptId]: value }));
+  };
 
   const handleSubmit = (e) => {
     e.preventDefault()
@@ -38,10 +62,10 @@ const ProjectModal = ({ project, isProfessional = false, onClose, onSave }) => {
     }
 
     if (isProfessional) {
-      projectData.team = formData.team
-        .split(",")
-        .map((member) => member.trim())
-        .filter(Boolean)
+      projectData.departments = selectedDepartments.map((deptId) => ({
+        departmentId: deptId,
+        leaderEmail: leaderEmails[deptId] || '',
+      }));
     }
 
     onSave(projectData)
@@ -86,7 +110,7 @@ const ProjectModal = ({ project, isProfessional = false, onClose, onSave }) => {
             ></textarea>
           </div>
 
-          {isProfessional && (
+          {!isProfessional && (
             <div className="form-group">
               <label htmlFor="team" className="form-label">
                 Team Members (comma separated)
@@ -100,6 +124,35 @@ const ProjectModal = ({ project, isProfessional = false, onClose, onSave }) => {
                 onChange={handleChange}
                 placeholder="e.g. John Doe, Jane Smith"
               />
+            </div>
+          )}
+
+          {isProfessional && (
+            <div className="form-group">
+              <label className="form-label">Departments Involved</label>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {departments.map((dept) => (
+                  <div key={dept.id} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <input
+                      type="checkbox"
+                      id={`dept-${dept.id}`}
+                      checked={selectedDepartments.includes(dept.id)}
+                      onChange={() => handleDepartmentChange(dept.id)}
+                    />
+                    <label htmlFor={`dept-${dept.id}`} style={{ minWidth: 60 }}>{dept.name}</label>
+                    {selectedDepartments.includes(dept.id) && (
+                      <input
+                        type="email"
+                        placeholder="Leader Email"
+                        value={leaderEmails[dept.id] || ''}
+                        onChange={e => handleLeaderEmailChange(dept.id, e.target.value)}
+                        style={{ flex: 1, minWidth: 180 }}
+                        required
+                      />
+                    )}
+                  </div>
+                ))}
+              </div>
             </div>
           )}
 

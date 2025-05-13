@@ -2,10 +2,11 @@
 
 import { useState, useEffect } from "react"
 import { useParams, Link, useNavigate } from "react-router-dom"
-import { ArrowLeft, Calendar, Clock, Users, Paperclip, MessageSquare, Send } from "react-feather"
+import { ArrowLeft, Calendar, Clock, Users, Paperclip, MessageSquare, Send, X } from "react-feather"
 import { toast } from "react-toastify"
 import TaskModal from "../../components/tasks/TaskModal"
 import { tasksApi } from "../../services/api"
+import { useAuth } from "../../context/AuthContext"
 import "./TaskDetails.css"
 
 const TaskDetails = () => {
@@ -16,6 +17,14 @@ const TaskDetails = () => {
   const [newComment, setNewComment] = useState("")
   const [isLoading, setIsLoading] = useState(true)
   const [isModalOpen, setIsModalOpen] = useState(false)
+  const { currentUser } = useAuth();
+  const [showRejectModal, setShowRejectModal] = useState(false);
+  const [rejectionReason, setRejectionReason] = useState("");
+  const [showExtensionModal, setShowExtensionModal] = useState(false);
+  const [extensionDays, setExtensionDays] = useState(1);
+  const [extensionReason, setExtensionReason] = useState("");
+  const [showRejectExtensionModal, setShowRejectExtensionModal] = useState(false);
+  const [rejectExtensionReason, setRejectExtensionReason] = useState("");
 
   useEffect(() => {
     const fetchTaskDetails = async () => {
@@ -24,11 +33,14 @@ const TaskDetails = () => {
         let response
         if (type === 'professional') {
           response = await tasksApi.getProfessionalTask(taskId)
+          // Fetch comments for professional tasks
+          const commentsResponse = await tasksApi.getTaskComments(taskId)
+          setComments(commentsResponse.data)
         } else {
           response = await tasksApi.getPersonalTask(taskId)
+          setComments([])
         }
         setTask(response.data)
-        setComments([])
       } catch (err) {
         setTask(null)
         setComments([])
@@ -75,20 +87,23 @@ const TaskDetails = () => {
     setNewComment(e.target.value)
   }
 
-  const handleSubmitComment = (e) => {
+  const handleSubmitComment = async (e) => {
     e.preventDefault()
     if (!newComment.trim()) return
 
-    const newCommentObj = {
-      id: Date.now(),
-      author: "You",
-      content: newComment,
-      timestamp: new Date().toISOString(),
+    try {
+      const response = await tasksApi.addTaskComment(task.id, {
+        content: newComment,
+        parentId: null // For now, we're not handling nested comments
+      })
+      
+      // Add the new comment to the list
+      setComments([...comments, response.data])
+      setNewComment("")
+      toast.success("Comment added successfully")
+    } catch (err) {
+      toast.error(err.message)
     }
-
-    setComments([...comments, newCommentObj])
-    setNewComment("")
-    toast.success("Comment added")
   }
 
   const formatDate = (dateString) => {
@@ -100,6 +115,93 @@ const TaskDetails = () => {
     const date = new Date(dateTimeString)
     return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
   }
+
+  // Accept task handler
+  const handleAcceptTask = async () => {
+    try {
+      await tasksApi.acceptProfessionalTask(task.id);
+      toast.success("Task accepted!");
+      // Refresh task details
+      const response = await tasksApi.getProfessionalTask(task.id);
+      setTask(response.data);
+    } catch (err) {
+      toast.error(err.message);
+    }
+  };
+
+  // Reject task handler
+  const handleRejectTask = async () => {
+    if (!rejectionReason.trim()) {
+      toast.error("Please provide a rejection reason.");
+      return;
+    }
+    try {
+      await tasksApi.rejectProfessionalTask(task.id, { rejectionReason });
+      toast.success("Task rejected!");
+      setShowRejectModal(false);
+      setRejectionReason("");
+      // Refresh task details
+      const response = await tasksApi.getProfessionalTask(task.id);
+      setTask(response.data);
+    } catch (err) {
+      toast.error(err.message);
+    }
+  };
+
+  // Request extension handler
+  const handleRequestExtension = async () => {
+    if (!extensionReason.trim() || extensionDays < 1 || extensionDays > 7) {
+      toast.error("Please provide a valid reason and days (1-7)." );
+      return;
+    }
+    try {
+      await tasksApi.requestProfessionalTaskExtension(task.id, {
+        extensionRequestDays: extensionDays,
+        extensionRequestReason: extensionReason
+      });
+      toast.success("Extension request sent!");
+      setShowExtensionModal(false);
+      setExtensionReason("");
+      setExtensionDays(1);
+      // Refresh task details
+      const response = await tasksApi.getProfessionalTask(task.id);
+      setTask(response.data);
+    } catch (err) {
+      toast.error(err.message);
+    }
+  };
+
+  // Approve extension handler
+  const handleApproveExtension = async () => {
+    try {
+      await tasksApi.approveProfessionalTaskExtension(task.id);
+      toast.success("Extension request approved!");
+      // Refresh task details
+      const response = await tasksApi.getProfessionalTask(task.id);
+      setTask(response.data);
+    } catch (err) {
+      toast.error(err.message);
+    }
+  };
+
+  // Reject extension handler
+  const handleRejectExtension = async () => {
+    if (!rejectExtensionReason.trim()) {
+      toast.error("Please provide a reason for rejection.");
+      return;
+    }
+    try {
+      await tasksApi.rejectProfessionalTaskExtension(task.id, { rejectExtensionReason });
+      toast.success("Extension request rejected!");
+      setShowRejectExtensionModal(false);
+      setRejectExtensionReason("");
+      // Refresh task details
+      const response = await tasksApi.getProfessionalTask(task.id);
+      setTask(response.data);
+    } catch (err) {
+      toast.error(err.message);
+    }
+  };
 
   if (isLoading) {
     return (
@@ -213,9 +315,131 @@ const TaskDetails = () => {
             </ul>
           </div>
         )}
+
+        {/* Accept/Reject buttons for assignee of professional task */}
+        {type === 'professional' && task.status === 'pending' && currentUser && task.assignedToId === currentUser.id && (
+          <div className="task-action-bar" style={{ margin: '16px 0', display: 'flex', gap: 12 }}>
+            <button className="btn btn-success" onClick={handleAcceptTask}>Accept Task</button>
+            <button className="btn btn-danger" onClick={() => setShowRejectModal(true)}>Reject Task</button>
+          </div>
+        )}
+        {/* Deadline extension request for assignee */}
+        {type === 'professional' && currentUser && task.assignedToId === currentUser.id &&
+          (task.extensionStatus !== 'requested' && task.extensionStatus !== 'approved') && (
+          <div className="task-action-bar" style={{ margin: '16px 0', display: 'flex', gap: 12 }}>
+            <button className="btn btn-warning" onClick={() => setShowExtensionModal(true)}>Request Deadline Extension</button>
+          </div>
+        )}
+        {/* Reject modal */}
+        {showRejectModal && (
+          <div className="modal-overlay">
+            <div className="modal-container">
+              <div className="modal-header">
+                <h3>Reject Task</h3>
+                <button className="close-btn" onClick={() => setShowRejectModal(false)}><X size={20} /></button>
+              </div>
+              <div className="modal-form">
+                <label htmlFor="rejectionReason">Reason for rejection:</label>
+                <textarea
+                  id="rejectionReason"
+                  className="form-input"
+                  value={rejectionReason}
+                  onChange={e => setRejectionReason(e.target.value)}
+                  rows={3}
+                  required
+                />
+                <div className="modal-actions">
+                  <button className="btn btn-secondary" onClick={() => setShowRejectModal(false)}>Cancel</button>
+                  <button className="btn btn-danger" onClick={handleRejectTask}>Reject Task</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+        {/* Extension modal */}
+        {showExtensionModal && (
+          <div className="modal-overlay">
+            <div className="modal-container">
+              <div className="modal-header">
+                <h3>Request Deadline Extension</h3>
+                <button className="close-btn" onClick={() => setShowExtensionModal(false)}><X size={20} /></button>
+              </div>
+              <div className="modal-form">
+                <label htmlFor="extensionDays">Days (1-7):</label>
+                <input
+                  type="number"
+                  id="extensionDays"
+                  className="form-input"
+                  min={1}
+                  max={7}
+                  value={extensionDays}
+                  onChange={e => setExtensionDays(Number(e.target.value))}
+                  required
+                />
+                <label htmlFor="extensionReason">Reason:</label>
+                <textarea
+                  id="extensionReason"
+                  className="form-input"
+                  value={extensionReason}
+                  onChange={e => setExtensionReason(e.target.value)}
+                  rows={3}
+                  required
+                />
+                <div className="modal-actions">
+                  <button className="btn btn-secondary" onClick={() => setShowExtensionModal(false)}>Cancel</button>
+                  <button className="btn btn-warning" onClick={handleRequestExtension}>Request Extension</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Extension request details and actions for managers */}
+        {type === 'professional' && task.extensionStatus === 'requested' && 
+         currentUser && (task.assignedById === currentUser.id || task.ProfessionalProject?.creatorId === currentUser.id) && (
+          <div className="extension-request-section" style={{ margin: '16px 0', padding: '16px', border: '1px solid #e0e0e0', borderRadius: '4px' }}>
+            <h4>Extension Request</h4>
+            <div className="extension-details">
+              <p><strong>Requested Days:</strong> {task.extensionRequestDays}</p>
+              <p><strong>Reason:</strong> {task.extensionRequestReason}</p>
+              <p><strong>Requested On:</strong> {formatDate(task.extensionRequestDate)}</p>
+            </div>
+            <div className="task-action-bar" style={{ marginTop: '12px', display: 'flex', gap: 12 }}>
+              <button className="btn btn-success" onClick={handleApproveExtension}>Approve Extension</button>
+              <button className="btn btn-danger" onClick={() => setShowRejectExtensionModal(true)}>Reject Extension</button>
+            </div>
+          </div>
+        )}
+
+        {/* Reject extension modal */}
+        {showRejectExtensionModal && (
+          <div className="modal-overlay">
+            <div className="modal-container">
+              <div className="modal-header">
+                <h3>Reject Extension Request</h3>
+                <button className="close-btn" onClick={() => setShowRejectExtensionModal(false)}><X size={20} /></button>
+              </div>
+              <div className="modal-form">
+                <label htmlFor="rejectExtensionReason">Reason for rejection:</label>
+                <textarea
+                  id="rejectExtensionReason"
+                  className="form-input"
+                  value={rejectExtensionReason}
+                  onChange={e => setRejectExtensionReason(e.target.value)}
+                  rows={3}
+                  required
+                />
+                <div className="modal-actions">
+                  <button className="btn btn-secondary" onClick={() => setShowRejectExtensionModal(false)}>Cancel</button>
+                  <button className="btn btn-danger" onClick={handleRejectExtension}>Reject Extension</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
-      {/* Only show comments for professional tasks */}
+      {/* Comments section for professional tasks */}
       {type === 'professional' && (
         <div className="task-comments card">
           <h3 className="comments-title">
@@ -227,9 +451,22 @@ const TaskDetails = () => {
               comments.map((comment) => (
                 <div key={comment.id} className="comment-item">
                   <div className="comment-header">
-                    <span className="comment-author">{comment.author}</span>
+                    <div className="comment-author-info">
+                      {comment.user?.profilePhoto ? (
+                        <img 
+                          src={comment.user.profilePhoto} 
+                          alt={comment.user.name} 
+                          className="comment-author-avatar"
+                        />
+                      ) : (
+                        <div className="comment-author-avatar-placeholder">
+                          {comment.user?.name?.charAt(0)}
+                        </div>
+                      )}
+                      <span className="comment-author">{comment.user?.name || 'Unknown User'}</span>
+                    </div>
                     <span className="comment-time">
-                      {formatDate(comment.timestamp)} at {formatTime(comment.timestamp)}
+                      {formatDate(comment.createdAt)} at {formatTime(comment.createdAt)}
                     </span>
                   </div>
                   <p className="comment-content">{comment.content}</p>
@@ -248,7 +485,11 @@ const TaskDetails = () => {
               className="comment-input"
               rows="3"
             ></textarea>
-            <button type="submit" className="btn btn-primary comment-submit" disabled={!newComment.trim()}>
+            <button 
+              type="submit" 
+              className="btn btn-primary comment-submit" 
+              disabled={!newComment.trim()}
+            >
               <Send size={16} /> Send
             </button>
           </form>

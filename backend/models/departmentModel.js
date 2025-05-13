@@ -1,5 +1,5 @@
 const { DataTypes } = require('sequelize');
-const sequelize = require('../config/database');
+const sequelize = require('../config/sequelize');
 
 const Department = sequelize.define('Department', {
   id: {
@@ -19,6 +19,11 @@ const Department = sequelize.define('Department', {
   isActive: {
     type: DataTypes.BOOLEAN,
     defaultValue: true
+  },
+  color: {
+    type: DataTypes.STRING,
+    allowNull: true,
+    defaultValue: '#6c757d' // Default gray color
   }
 });
 

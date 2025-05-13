@@ -29,4 +29,10 @@ router.post('/:id/attachments', uploadAttachment);
 router.get('/stats', getTaskStats);
 router.get('/calendar', getTasksForCalendar);
 
+router.route('/:id/accept').post(require('../controllers/professionalTaskController').acceptProfessionalTask);
+router.route('/:id/reject').post(require('../controllers/professionalTaskController').rejectProfessionalTask);
+router.route('/:id/request-extension').post(require('../controllers/professionalTaskController').requestDeadlineExtension);
+router.route('/:id/approve-extension').post(require('../controllers/professionalTaskController').approveDeadlineExtension);
+router.route('/:id/reject-extension').post(require('../controllers/professionalTaskController').rejectDeadlineExtension);
+
 module.exports = router;

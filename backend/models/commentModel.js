@@ -1,5 +1,5 @@
 const { DataTypes } = require('sequelize');
-const sequelize = require('../config/database');
+const sequelize = require('../config/sequelize');
 
 const Comment = sequelize.define('Comment', {
   id: {
@@ -17,7 +17,15 @@ const Comment = sequelize.define('Comment', {
   },
   taskId: {
     type: DataTypes.INTEGER,
-    allowNull: false
+    allowNull: true
+  },
+  projectId: {
+    type: DataTypes.INTEGER,
+    allowNull: true,
+    references: {
+      model: 'ProfessionalProjects',
+      key: 'id'
+    }
   },
   isEdited: {
     type: DataTypes.BOOLEAN,

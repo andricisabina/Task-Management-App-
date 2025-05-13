@@ -47,6 +47,12 @@ export const projectsApi = {
   createProfessionalProject: (data) => api.post('/professional-projects', data),
   updateProfessionalProject: (id, data) => api.put(`/professional-projects/${id}`, data),
   deleteProfessionalProject: (id) => api.delete(`/professional-projects/${id}`),
+
+  // Project Comments
+  addProjectComment: (projectId, data) => api.post(`/professional-projects/${projectId}/comments`, data),
+  getProjectComments: (projectId) => api.get(`/professional-projects/${projectId}/comments`),
+  editProjectComment: (projectId, commentId, data) => api.put(`/professional-projects/${projectId}/comments/${commentId}`, data),
+  deleteProjectComment: (projectId, commentId) => api.delete(`/professional-projects/${projectId}/comments/${commentId}`),
 };
 
 // Tasks API
@@ -72,6 +78,11 @@ export const dashboardApi = {
   getTeamDashboard: () => api.get('/dashboard/team'),
   getDepartmentProductivity: (month, year) => 
     api.get(`/dashboard/department/productivity?month=${month}&year=${year}`),
+};
+
+// Departments API
+export const departmentsApi = {
+  getDepartments: () => api.get('/departments'),
 };
 
 // Error interceptor

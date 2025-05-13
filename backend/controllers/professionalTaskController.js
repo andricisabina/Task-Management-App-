@@ -219,37 +219,49 @@ exports.getProfessionalTask = asyncHandler(async (req, res, next) => {
 exports.createProfessionalTask = asyncHandler(async (req, res, next) => {
   // Add assigner ID to body
   req.body.assignedById = req.user.id;
-  
+
   // Check if project exists
   const project = await ProfessionalProject.findByPk(req.body.projectId);
-  
   if (!project) {
     return next(new ErrorResponse(`Project not found with id of ${req.body.projectId}`, 404));
   }
-  
-  // Check if assignee exists if provided
-  if (req.body.assignedToId) {
-    const assignee = await User.findByPk(req.body.assignedToId);
-    
+
+  // Only project manager (creator) can create tasks
+  if (project.creatorId !== req.user.id && req.user.role !== 'admin') {
+    return next(new ErrorResponse('Only the project manager can create tasks for this project', 403));
+  }
+
+  // Assignment by email
+  let assignee = null;
+  if (req.body.assignedToEmail) {
+    assignee = await User.findOne({ where: { email: req.body.assignedToEmail } });
+    if (!assignee) {
+      return next(new ErrorResponse(`User not found with email ${req.body.assignedToEmail}`, 404));
+    }
+    req.body.assignedToId = assignee.id;
+  } else if (req.body.assignedToId) {
+    assignee = await User.findByPk(req.body.assignedToId);
     if (!assignee) {
       return next(new ErrorResponse(`User not found with id of ${req.body.assignedToId}`, 404));
     }
   }
-  
+
   // Save original due date for tracking extensions
   if (req.body.dueDate) {
     req.body.originalDueDate = req.body.dueDate;
   }
-  
-  // Set department same as project
-  req.body.departmentId = project.departmentId;
-  
+
+  // Set departmentId from request or project
+  if (!req.body.departmentId) {
+    req.body.departmentId = project.departmentId;
+  }
+
   const task = await ProfessionalTask.create(req.body);
-  
-  // Create notification for assigned user if applicable
-  if (req.body.assignedToId) {
+
+  // Create notification and send email for assigned user if applicable
+  if (assignee) {
     await Notification.create({
-      userId: req.body.assignedToId,
+      userId: assignee.id,
       title: 'New Task Assigned',
       message: `You have been assigned a new task: ${task.title}`,
       type: 'task_assigned',
@@ -257,8 +269,19 @@ exports.createProfessionalTask = asyncHandler(async (req, res, next) => {
       relatedType: 'professional_task',
       link: `/tasks/professional/${task.id}`
     });
+    // Send email (assume sendEmail utility is available)
+    try {
+      await require('../utils/sendEmail')({
+        to: assignee.email,
+        subject: 'You have been assigned a new task',
+        text: `Hello ${assignee.name},\n\nYou have been assigned a new task: ${task.title}\nProject: ${project.title}\nDue Date: ${task.dueDate}\n\nPlease log in to view the details.`,
+      });
+    } catch (emailErr) {
+      // Log but do not fail the request
+      console.error('Failed to send assignment email:', emailErr);
+    }
   }
-  
+
   res.status(201).json({
     success: true,
     data: task
@@ -273,35 +296,33 @@ exports.updateProfessionalTask = asyncHandler(async (req, res, next) => {
     include: [
       {
         model: ProfessionalProject,
-        attributes: ['creatorId']
+        attributes: ['id', 'title', 'creatorId']
       }
     ]
   });
-  
   if (!task) {
     return next(new ErrorResponse(`Task not found with id of ${req.params.id}`, 404));
   }
-  
   // Check if user has permission to update
   const isAssignee = task.assignedToId === req.user.id;
   const isAssigner = task.assignedById === req.user.id;
   const isProjectCreator = task.ProfessionalProject && task.ProfessionalProject.creatorId === req.user.id;
-  
   if (!isAssignee && !isAssigner && !isProjectCreator && req.user.role !== 'admin') {
     return next(new ErrorResponse(`User not authorized to update this task`, 401));
   }
-  
+
+  // Save old assignee for notification logic
+  const oldAssigneeId = task.assignedToId;
+
   // Special handling for task status changes
   if (req.body.status) {
     // Only assignee can mark task as completed
     if (req.body.status === 'completed' && !isAssignee && req.user.role !== 'admin') {
       return next(new ErrorResponse(`Only the assignee can mark a task as completed`, 403));
     }
-    
     // Set completedAt if task is being marked as completed
     if (req.body.status === 'completed' && task.status !== 'completed') {
       req.body.completedAt = new Date();
-      
       // Create notification for task assigner
       if (task.assignedById) {
         await Notification.create({
@@ -317,20 +338,16 @@ exports.updateProfessionalTask = asyncHandler(async (req, res, next) => {
     } else if (req.body.status !== 'completed' && task.status === 'completed') {
       req.body.completedAt = null;
     }
-    
     // Handle rejection reasons
     if (req.body.status === 'rejected' && !req.body.rejectionReason) {
       return next(new ErrorResponse(`Rejection reason is required when rejecting a task`, 400));
     }
-    
     // Handle deadline extension requests
     if (req.body.status === 'deadline-extension-requested') {
       if (!req.body.extensionRequestDays || !req.body.extensionRequestReason) {
         return next(new ErrorResponse(`Extension days and reason are required for deadline extension requests`, 400));
       }
-      
       req.body.extensionStatus = 'requested';
-      
       // Create notification for task assigner
       if (task.assignedById) {
         await Notification.create({
@@ -344,23 +361,19 @@ exports.updateProfessionalTask = asyncHandler(async (req, res, next) => {
         });
       }
     }
-    
     // Handle extension responses
     if (req.body.extensionStatus && (req.body.extensionStatus === 'approved' || req.body.extensionStatus === 'rejected')) {
       // Only assigner or project creator can approve/reject extensions
       if (!isAssigner && !isProjectCreator && req.user.role !== 'admin') {
         return next(new ErrorResponse(`Only the task assigner or project creator can respond to extension requests`, 403));
       }
-      
       if (req.body.extensionStatus === 'approved' && task.extensionRequestDays > 0) {
         // Calculate new due date
         const currentDueDate = new Date(task.dueDate);
         currentDueDate.setDate(currentDueDate.getDate() + task.extensionRequestDays);
         req.body.dueDate = currentDueDate;
-        
         // Set status back to in-progress
         req.body.status = 'in-progress';
-        
         // Create notification for assignee
         if (task.assignedToId) {
           await Notification.create({
@@ -376,7 +389,6 @@ exports.updateProfessionalTask = asyncHandler(async (req, res, next) => {
       } else if (req.body.extensionStatus === 'rejected') {
         // Set status back to in-progress
         req.body.status = 'in-progress';
-        
         // Create notification for assignee
         if (task.assignedToId) {
           await Notification.create({
@@ -392,12 +404,19 @@ exports.updateProfessionalTask = asyncHandler(async (req, res, next) => {
       }
     }
   }
-  
+
   // Update task
   await task.update(req.body);
-  
-  // If assignee is changed, create notification
-  if (req.body.assignedToId && req.body.assignedToId !== task.assignedToId) {
+
+  // Notify all involved users (except the updater) on any update
+  const involvedUserIds = new Set();
+  if (task.assignedToId) involvedUserIds.add(task.assignedToId);
+  if (task.assignedById) involvedUserIds.add(task.assignedById);
+  if (task.ProfessionalProject && task.ProfessionalProject.creatorId) involvedUserIds.add(task.ProfessionalProject.creatorId);
+  involvedUserIds.delete(req.user.id); // Don't notify the updater
+
+  // If assignee is changed, notify new assignee and send email
+  if (req.body.assignedToId && req.body.assignedToId !== oldAssigneeId) {
     await Notification.create({
       userId: req.body.assignedToId,
       title: 'Task Assigned to You',
@@ -407,8 +426,34 @@ exports.updateProfessionalTask = asyncHandler(async (req, res, next) => {
       relatedType: 'professional_task',
       link: `/tasks/professional/${task.id}`
     });
+    // Send email on assignment
+    const sendEmail = require('../utils/sendEmail');
+    const user = await User.findByPk(req.body.assignedToId);
+    if (user) {
+      try {
+        await sendEmail({
+          to: user.email,
+          subject: 'Task Assigned to You',
+          text: `You have been assigned to task: ${task.title}`
+        });
+      } catch (e) { console.error('Failed to send email:', e); }
+    }
+    involvedUserIds.delete(req.body.assignedToId); // Already notified above
   }
-  
+
+  // Notify all other involved users
+  for (const userId of involvedUserIds) {
+    await Notification.create({
+      userId,
+      title: 'Task Updated',
+      message: `Task "${task.title}" has been updated`,
+      type: 'task_updated',
+      relatedId: task.id,
+      relatedType: 'professional_task',
+      link: `/tasks/professional/${task.id}`
+    });
+  }
+
   // Fetch updated task with relationships
   const updatedTask = await ProfessionalTask.findByPk(task.id, {
     include: [
@@ -423,7 +468,7 @@ exports.updateProfessionalTask = asyncHandler(async (req, res, next) => {
       }
     ]
   });
-  
+
   res.status(200).json({
     success: true,
     data: updatedTask
@@ -505,12 +550,12 @@ exports.deleteProfessionalTask = asyncHandler(async (req, res, next) => {
 // @route   POST /api/professional-tasks/:id/comments
 // @access  Private
 exports.addComment = asyncHandler(async (req, res, next) => {
-  const task = await ProfessionalTask.findByPk(req.params.id);
-  
+  const task = await ProfessionalTask.findByPk(req.params.id, {
+    include: [{ model: ProfessionalProject, attributes: ['id', 'title', 'creatorId'] }]
+  });
   if (!task) {
     return next(new ErrorResponse(`Task not found with id of ${req.params.id}`, 404));
   }
-  
   // Create comment
   const comment = await Comment.create({
     content: req.body.content,
@@ -518,7 +563,6 @@ exports.addComment = asyncHandler(async (req, res, next) => {
     taskId: task.id,
     parentId: req.body.parentId || null
   });
-  
   // Fetch comment with user data
   const commentWithUser = await Comment.findByPk(comment.id, {
     include: [{
@@ -526,11 +570,16 @@ exports.addComment = asyncHandler(async (req, res, next) => {
       attributes: ['id', 'name', 'profilePhoto']
     }]
   });
-  
-  // Create notification for task assignee if the commenter is not the assignee
-  if (task.assignedToId && task.assignedToId !== req.user.id) {
+  // Notify all involved users (assignee, assigner, manager) except the commenter
+  const involvedUserIds = new Set();
+  if (task.assignedToId) involvedUserIds.add(task.assignedToId);
+  if (task.assignedById) involvedUserIds.add(task.assignedById);
+  if (task.ProfessionalProject && task.ProfessionalProject.creatorId) involvedUserIds.add(task.ProfessionalProject.creatorId);
+  involvedUserIds.delete(req.user.id);
+  const sendEmail = require('../utils/sendEmail');
+  for (const userId of involvedUserIds) {
     await Notification.create({
-      userId: task.assignedToId,
+      userId,
       title: 'New Comment on Task',
       message: `${req.user.name} commented on task "${task.title}"`,
       type: 'comment_added',
@@ -538,21 +587,18 @@ exports.addComment = asyncHandler(async (req, res, next) => {
       relatedType: 'professional_task',
       link: `/tasks/professional/${task.id}`
     });
+    // Send email
+    const user = await User.findByPk(userId);
+    if (user) {
+      try {
+        await sendEmail({
+          to: user.email,
+          subject: 'New Comment on Task',
+          text: `${req.user.name} commented on task: ${task.title} in project ${task.ProfessionalProject.title}\n\nComment: ${req.body.content}`
+        });
+      } catch (e) { console.error('Failed to send email:', e); }
+    }
   }
-  
-  // Create notification for task assigner if the commenter is not the assigner
-  if (task.assignedById && task.assignedById !== req.user.id && task.assignedById !== task.assignedToId) {
-    await Notification.create({
-      userId: task.assignedById,
-      title: 'New Comment on Task',
-      message: `${req.user.name} commented on task "${task.title}"`,
-      type: 'comment_added',
-      relatedId: task.id,
-      relatedType: 'professional_task',
-      link: `/tasks/professional/${task.id}`
-    });
-  }
-  
   res.status(201).json({
     success: true,
     data: commentWithUser
@@ -807,6 +853,271 @@ exports.getTasksForCalendar = asyncHandler(async (req, res, next) => {
     count: tasks.length,
     data: tasks
   });
+});
+
+// @desc    Accept a professional task (by assignee)
+// @route   POST /api/professional-tasks/:id/accept
+// @access  Private
+exports.acceptProfessionalTask = asyncHandler(async (req, res, next) => {
+  const task = await ProfessionalTask.findByPk(req.params.id, {
+    include: [{ model: ProfessionalProject, attributes: ['id', 'title', 'creatorId'] }]
+  });
+  if (!task) return next(new ErrorResponse('Task not found', 404));
+  if (task.assignedToId !== req.user.id) return next(new ErrorResponse('Only the assigned user can accept this task', 403));
+  if (task.status !== 'pending') return next(new ErrorResponse('Task cannot be accepted in its current status', 400));
+
+  await task.update({ status: 'in-progress' });
+
+  // Notify assigner and manager
+  const assigner = task.assignedById ? await User.findByPk(task.assignedById) : null;
+  const manager = task.ProfessionalProject ? await User.findByPk(task.ProfessionalProject.creatorId) : null;
+  const notifications = [];
+  if (assigner) notifications.push({
+    userId: assigner.id,
+    title: 'Task Accepted',
+    message: `${req.user.name} accepted the task: ${task.title}`,
+    type: 'task_updated',
+    relatedId: task.id,
+    relatedType: 'professional_task',
+    link: `/tasks/professional/${task.id}`
+  });
+  if (manager && (!assigner || manager.id !== assigner.id)) notifications.push({
+    userId: manager.id,
+    title: 'Task Accepted',
+    message: `${req.user.name} accepted the task: ${task.title}`,
+    type: 'task_updated',
+    relatedId: task.id,
+    relatedType: 'professional_task',
+    link: `/tasks/professional/${task.id}`
+  });
+  await Notification.bulkCreate(notifications);
+  // Send emails
+  const sendEmail = require('../utils/sendEmail');
+  for (const n of notifications) {
+    const user = await User.findByPk(n.userId);
+    if (user) {
+      try {
+        await sendEmail({
+          to: user.email,
+          subject: 'Task Accepted',
+          text: `${req.user.name} has accepted the task: ${task.title} in project ${task.ProfessionalProject.title}`
+        });
+      } catch (e) { console.error('Failed to send email:', e); }
+    }
+  }
+  res.status(200).json({ success: true, data: task });
+});
+
+// @desc    Reject a professional task (by assignee)
+// @route   POST /api/professional-tasks/:id/reject
+// @access  Private
+exports.rejectProfessionalTask = asyncHandler(async (req, res, next) => {
+  const task = await ProfessionalTask.findByPk(req.params.id, {
+    include: [{ model: ProfessionalProject, attributes: ['id', 'title', 'creatorId'] }]
+  });
+  if (!task) return next(new ErrorResponse('Task not found', 404));
+  if (task.assignedToId !== req.user.id) return next(new ErrorResponse('Only the assigned user can reject this task', 403));
+  if (task.status !== 'pending') return next(new ErrorResponse('Task cannot be rejected in its current status', 400));
+  if (!req.body.rejectionReason) return next(new ErrorResponse('Rejection reason is required', 400));
+
+  await task.update({ status: 'rejected', rejectionReason: req.body.rejectionReason });
+
+  // Notify assigner and manager
+  const assigner = task.assignedById ? await User.findByPk(task.assignedById) : null;
+  const manager = task.ProfessionalProject ? await User.findByPk(task.ProfessionalProject.creatorId) : null;
+  const notifications = [];
+  if (assigner) notifications.push({
+    userId: assigner.id,
+    title: 'Task Rejected',
+    message: `${req.user.name} rejected the task: ${task.title}`,
+    type: 'task_updated',
+    relatedId: task.id,
+    relatedType: 'professional_task',
+    link: `/tasks/professional/${task.id}`
+  });
+  if (manager && (!assigner || manager.id !== assigner.id)) notifications.push({
+    userId: manager.id,
+    title: 'Task Rejected',
+    message: `${req.user.name} rejected the task: ${task.title}`,
+    type: 'task_updated',
+    relatedId: task.id,
+    relatedType: 'professional_task',
+    link: `/tasks/professional/${task.id}`
+  });
+  await Notification.bulkCreate(notifications);
+  // Send emails
+  const sendEmail = require('../utils/sendEmail');
+  for (const n of notifications) {
+    const user = await User.findByPk(n.userId);
+    if (user) {
+      try {
+        await sendEmail({
+          to: user.email,
+          subject: 'Task Rejected',
+          text: `${req.user.name} has rejected the task: ${task.title} in project ${task.ProfessionalProject.title}\nReason: ${req.body.rejectionReason}`
+        });
+      } catch (e) { console.error('Failed to send email:', e); }
+    }
+  }
+  res.status(200).json({ success: true, data: task });
+});
+
+// @desc    Request deadline extension (by assignee)
+// @route   POST /api/professional-tasks/:id/request-extension
+// @access  Private
+exports.requestDeadlineExtension = asyncHandler(async (req, res, next) => {
+  const task = await ProfessionalTask.findByPk(req.params.id, {
+    include: [{ model: ProfessionalProject, attributes: ['id', 'title', 'creatorId'] }]
+  });
+  if (!task) return next(new ErrorResponse('Task not found', 404));
+  if (task.assignedToId !== req.user.id) return next(new ErrorResponse('Only the assigned user can request an extension', 403));
+  if (!req.body.extensionRequestDays || !req.body.extensionRequestReason) return next(new ErrorResponse('Extension days and reason are required', 400));
+  if (req.body.extensionRequestDays < 1 || req.body.extensionRequestDays > 7) return next(new ErrorResponse('Extension days must be between 1 and 7', 400));
+
+  await task.update({
+    status: 'deadline-extension-requested',
+    extensionRequestDays: req.body.extensionRequestDays,
+    extensionRequestReason: req.body.extensionRequestReason,
+    extensionStatus: 'requested'
+  });
+
+  // Notify assigner and manager
+  const assigner = task.assignedById ? await User.findByPk(task.assignedById) : null;
+  const manager = task.ProfessionalProject ? await User.findByPk(task.ProfessionalProject.creatorId) : null;
+  const notifications = [];
+  if (assigner) notifications.push({
+    userId: assigner.id,
+    title: 'Deadline Extension Requested',
+    message: `${req.user.name} requested a deadline extension for task: ${task.title}`,
+    type: 'extension_requested',
+    relatedId: task.id,
+    relatedType: 'professional_task',
+    link: `/tasks/professional/${task.id}`
+  });
+  if (manager && (!assigner || manager.id !== assigner.id)) notifications.push({
+    userId: manager.id,
+    title: 'Deadline Extension Requested',
+    message: `${req.user.name} requested a deadline extension for task: ${task.title}`,
+    type: 'extension_requested',
+    relatedId: task.id,
+    relatedType: 'professional_task',
+    link: `/tasks/professional/${task.id}`
+  });
+  await Notification.bulkCreate(notifications);
+  // Send emails
+  const sendEmail = require('../utils/sendEmail');
+  for (const n of notifications) {
+    const user = await User.findByPk(n.userId);
+    if (user) {
+      try {
+        await sendEmail({
+          to: user.email,
+          subject: 'Deadline Extension Requested',
+          text: `${req.user.name} has requested a deadline extension for task: ${task.title} in project ${task.ProfessionalProject.title}\nDays requested: ${req.body.extensionRequestDays}\nReason: ${req.body.extensionRequestReason}`
+        });
+      } catch (e) { console.error('Failed to send email:', e); }
+    }
+  }
+  res.status(200).json({ success: true, data: task });
+});
+
+// @desc    Approve deadline extension (by assigner or manager)
+// @route   POST /api/professional-tasks/:id/approve-extension
+// @access  Private
+exports.approveDeadlineExtension = asyncHandler(async (req, res, next) => {
+  const task = await ProfessionalTask.findByPk(req.params.id, {
+    include: [{ model: ProfessionalProject, attributes: ['id', 'title', 'creatorId'] }]
+  });
+  if (!task) return next(new ErrorResponse('Task not found', 404));
+  const isAssigner = task.assignedById === req.user.id;
+  const isManager = task.ProfessionalProject && task.ProfessionalProject.creatorId === req.user.id;
+  if (!isAssigner && !isManager && req.user.role !== 'admin') return next(new ErrorResponse('Only the assigner or manager can approve extension', 403));
+  if (task.extensionStatus !== 'requested') return next(new ErrorResponse('No pending extension request', 400));
+  if (!task.extensionRequestDays || task.extensionRequestDays < 1 || task.extensionRequestDays > 7) return next(new ErrorResponse('Invalid extension days', 400));
+
+  // Update due date
+  const newDueDate = new Date(task.dueDate);
+  newDueDate.setDate(newDueDate.getDate() + task.extensionRequestDays);
+  await task.update({
+    dueDate: newDueDate,
+    status: 'in-progress',
+    extensionStatus: 'approved',
+    extensionRequestDays: 0,
+    extensionRequestReason: null
+  });
+
+  // Notify assignee
+  if (task.assignedToId) {
+    await Notification.create({
+      userId: task.assignedToId,
+      title: 'Deadline Extension Approved',
+      message: `Your deadline extension request for task: ${task.title} was approved`,
+      type: 'extension_response',
+      relatedId: task.id,
+      relatedType: 'professional_task',
+      link: `/tasks/professional/${task.id}`
+    });
+    // Send email
+    const sendEmail = require('../utils/sendEmail');
+    const user = await User.findByPk(task.assignedToId);
+    if (user) {
+      try {
+        await sendEmail({
+          to: user.email,
+          subject: 'Deadline Extension Approved',
+          text: `Your deadline extension request for task: ${task.title} in project ${task.ProfessionalProject.title} was approved. New due date: ${newDueDate.toLocaleString()}`
+        });
+      } catch (e) { console.error('Failed to send email:', e); }
+    }
+  }
+  res.status(200).json({ success: true, data: task });
+});
+
+// @desc    Reject deadline extension (by assigner or manager)
+// @route   POST /api/professional-tasks/:id/reject-extension
+// @access  Private
+exports.rejectDeadlineExtension = asyncHandler(async (req, res, next) => {
+  const task = await ProfessionalTask.findByPk(req.params.id, {
+    include: [{ model: ProfessionalProject, attributes: ['id', 'title', 'creatorId'] }]
+  });
+  if (!task) return next(new ErrorResponse('Task not found', 404));
+  const isAssigner = task.assignedById === req.user.id;
+  const isManager = task.ProfessionalProject && task.ProfessionalProject.creatorId === req.user.id;
+  if (!isAssigner && !isManager && req.user.role !== 'admin') return next(new ErrorResponse('Only the assigner or manager can reject extension', 403));
+  if (task.extensionStatus !== 'requested') return next(new ErrorResponse('No pending extension request', 400));
+
+  await task.update({
+    status: 'in-progress',
+    extensionStatus: 'rejected',
+    extensionRequestDays: 0,
+    extensionRequestReason: null
+  });
+
+  // Notify assignee
+  if (task.assignedToId) {
+    await Notification.create({
+      userId: task.assignedToId,
+      title: 'Deadline Extension Rejected',
+      message: `Your deadline extension request for task: ${task.title} was rejected`,
+      type: 'extension_response',
+      relatedId: task.id,
+      relatedType: 'professional_task',
+      link: `/tasks/professional/${task.id}`
+    });
+    // Send email
+    const sendEmail = require('../utils/sendEmail');
+    const user = await User.findByPk(task.assignedToId);
+    if (user) {
+      try {
+        await sendEmail({
+          to: user.email,
+          subject: 'Deadline Extension Rejected',
+          text: `Your deadline extension request for task: ${task.title} in project ${task.ProfessionalProject.title} was rejected.`
+        });
+      } catch (e) { console.error('Failed to send email:', e); }
+    }
+  }
+  res.status(200).json({ success: true, data: task });
 });
 
 module.exports = exports;

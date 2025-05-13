@@ -16,15 +16,23 @@ import {
   CheckCircle,
   Clock,
   AlertCircle,
+  MessageSquare,
+  Send,
+  X,
+  CornerUpLeft,
+  Edit2,
+  Trash2,
 } from "react-feather"
 import { toast } from "react-toastify"
 import TaskModal from "../../components/tasks/TaskModal"
 import { projectsApi, tasksApi } from "../../services/api"
 import "./ProjectDetails.css"
 import ReactDOM from "react-dom"
+import { useAuth } from "../../context/AuthContext"
+import ConfirmModal from "../../components/ConfirmModal"
 
 const ProjectDetails = () => {
-  const { projectId } = useParams()
+  const { type, projectId } = useParams()
   const navigate = useNavigate()
   const [project, setProject] = useState(null)
   const [tasks, setTasks] = useState([])
@@ -42,9 +50,20 @@ const ProjectDetails = () => {
   const [filterStatus, setFilterStatus] = useState("all");
   const [filterPriority, setFilterPriority] = useState("all");
   const [isFilterOpen, setIsFilterOpen] = useState(false);
+  const [comments, setComments] = useState([])
+  const [newComment, setNewComment] = useState("")
+  const [replyingTo, setReplyingTo] = useState(null)
+  const [replyContent, setReplyContent] = useState("")
+  const [editingCommentId, setEditingCommentId] = useState(null)
+  const [editingContent, setEditingContent] = useState({})
+  const { currentUser } = useAuth();
+  const [deleteConfirm, setDeleteConfirm] = useState({ open: false, comment: null });
 
   useEffect(() => {
     fetchProjectDetails()
+    if (type === 'professional') {
+      fetchProjectComments()
+    }
   }, [projectId])
 
   useEffect(() => {
@@ -59,8 +78,8 @@ const ProjectDetails = () => {
       setIsLoading(true)
       setError(null)
 
-      // Determine if it's a professional project based on ID format
-      const isProfessional = Number.parseInt(projectId) > 100
+      // Determine project type from route param
+      const isProfessional = type === "professional"
       
       // Fetch project details
       const projectResponse = isProfessional 
@@ -91,10 +110,25 @@ const ProjectDetails = () => {
 
   const fetchProjectStats = async () => {
     try {
-      const response = await projectsApi.getPersonalProjectStats(project.id)
-      setProjectStats(response.data)
+      if (type === "personal") {
+        const response = await projectsApi.getPersonalProjectStats(project.id)
+        setProjectStats(response.data)
+      } else if (type === "professional" && projectsApi.getProfessionalProjectStats) {
+        // If you have professional stats endpoint, call it here
+        const response = await projectsApi.getProfessionalProjectStats(project.id)
+        setProjectStats(response.data)
+      }
     } catch (err) {
       toast.error("Failed to load project stats")
+    }
+  }
+
+  const fetchProjectComments = async () => {
+    try {
+      const response = await projectsApi.getProjectComments(projectId)
+      setComments(response.data)
+    } catch (err) {
+      toast.error("Failed to load comments")
     }
   }
 
@@ -193,6 +227,67 @@ const ProjectDetails = () => {
     }
   }
 
+  const handleCommentChange = (e) => {
+    setNewComment(e.target.value)
+  }
+
+  const handleReplyChange = (e) => {
+    setReplyContent(e.target.value)
+  }
+
+  const handleSubmitComment = async (e) => {
+    e.preventDefault()
+    if (!newComment.trim()) return
+
+    try {
+      const response = await projectsApi.addProjectComment(projectId, {
+        content: newComment,
+        parentId: null
+      })
+      
+      setComments([...comments, response.data])
+      setNewComment("")
+      toast.success("Comment added successfully")
+    } catch (err) {
+      toast.error(err.message)
+    }
+  }
+
+  const handleSubmitReply = async (e) => {
+    e.preventDefault()
+    if (!replyContent.trim() || !replyingTo) return
+
+    try {
+      const response = await projectsApi.addProjectComment(projectId, {
+        content: replyContent,
+        parentId: replyingTo.id
+      })
+      
+      // Add the reply to the parent comment's replies
+      setComments(comments.map(comment => 
+        comment.id === replyingTo.id 
+          ? { ...comment, replies: [...(comment.replies || []), response.data] }
+          : comment
+      ))
+      
+      setReplyContent("")
+      setReplyingTo(null)
+      toast.success("Reply added successfully")
+    } catch (err) {
+      toast.error(err.message)
+    }
+  }
+
+  const formatDate = (dateString) => {
+    const options = { year: "numeric", month: "long", day: "numeric" }
+    return new Date(dateString).toLocaleDateString(undefined, options)
+  }
+
+  const formatTime = (dateTimeString) => {
+    const date = new Date(dateTimeString)
+    return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+  }
+
   const filteredTasks = tasks.filter((task) => {
     // Filter by search term
     const matchesSearch = task.title.toLowerCase().includes(searchTerm.toLowerCase());
@@ -237,6 +332,53 @@ const ProjectDetails = () => {
     completedTasks = parseInt(projectStats.taskCounts.find(t => t.status === "completed")?.count || 0)
     completionRate = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0
   }
+
+  // Edit comment handler
+  const handleEditComment = (comment) => {
+    setEditingCommentId(comment.id)
+    setEditingContent((prev) => ({ ...prev, [comment.id]: comment.content }))
+  }
+
+  const handleSaveEdit = async (comment) => {
+    try {
+      const response = await projectsApi.editProjectComment(projectId, comment.id, { content: editingContent[comment.id] })
+      setComments(comments.map(c => {
+        if (c.id === comment.id) return { ...c, ...response.data }
+        if (c.replies) {
+          return { ...c, replies: c.replies.map(r => r.id === comment.id ? { ...r, ...response.data } : r) }
+        }
+        return c
+      }))
+      setEditingCommentId(null)
+      setEditingContent((prev) => {
+        const newState = { ...prev }
+        delete newState[comment.id]
+        return newState
+      })
+      toast.success("Comment updated")
+    } catch (err) {
+      toast.error(err.message)
+    }
+  }
+
+  const handleDeleteComment = (comment) => {
+    setDeleteConfirm({ open: true, comment });
+  };
+
+  const confirmDeleteComment = async () => {
+    const comment = deleteConfirm.comment;
+    setDeleteConfirm({ open: false, comment: null });
+    try {
+      await projectsApi.deleteProjectComment(projectId, comment.id);
+      setComments(comments.filter(c => c.id !== comment.id).map(c => ({
+        ...c,
+        replies: c.replies ? c.replies.filter(r => r.id !== comment.id) : []
+      })));
+      toast.success("Comment deleted");
+    } catch (err) {
+      toast.error(err.message);
+    }
+  };
 
   if (isLoading) {
     return (
@@ -300,14 +442,27 @@ const ProjectDetails = () => {
             <Calendar size={16} />
             <span>Created on {new Date(project.createdAt).toLocaleDateString()}</span>
           </div>
-
           {project.type === "professional" && (
             <div className="meta-item">
               <Users size={16} />
-              <span>Team: {project.Users?.map(user => user.name).join(", ") || "No team members"}</span>
+              <span>Manager: {project.creator?.name || project.creator?.email}</span>
             </div>
           )}
         </div>
+
+        {/* Department Leaders */}
+        {project.type === "professional" && project.departments && project.departments.length > 0 && (
+          <div className="department-leaders" style={{ marginTop: 16 }}>
+            <h4 style={{ marginBottom: 8 }}>Department Leaders</h4>
+            <ul style={{ paddingLeft: 16 }}>
+              {project.departments.map(dept => (
+                <li key={dept.id} style={{ marginBottom: 4 }}>
+                  <strong>{dept.name}:</strong> {dept.ProjectDepartment?.leaderId ? (project.Users?.find(u => u.id === dept.ProjectDepartment.leaderId)?.name || project.Users?.find(u => u.id === dept.ProjectDepartment.leaderId)?.email || 'Invited') : 'Not assigned'}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
 
         <div className="project-progress">
           <div className="progress-stats">
@@ -474,6 +629,176 @@ const ProjectDetails = () => {
         )}
       </div>
 
+      {/* Project Comments Section */}
+      {type === 'professional' && (
+        <div className="project-comments card">
+          <h3 className="comments-title">
+            <MessageSquare size={18} /> Project Comments
+          </h3>
+
+          <div className="comments-list">
+            {comments.length > 0 ? (
+              comments.map((comment) => (
+                <div key={comment.id} className="comment-item">
+                  <div className="comment-header">
+                    <div className="comment-author-info">
+                      {comment.user?.profilePhoto ? (
+                        <img 
+                          src={comment.user.profilePhoto} 
+                          alt={comment.user.name} 
+                          className="comment-author-avatar"
+                        />
+                      ) : (
+                        <div className="comment-author-avatar-placeholder">
+                          {comment.user?.name?.charAt(0)}
+                        </div>
+                      )}
+                      <span className="comment-author">{comment.user?.name || 'Unknown User'}</span>
+                      {comment.isEdited && <span style={{ fontSize: '0.8em', color: '#888', marginLeft: 8 }}>(edited)</span>}
+                    </div>
+                    <span className="comment-time">
+                      {formatDate(comment.createdAt)} at {formatTime(comment.createdAt)}
+                    </span>
+                    {/* Edit/Delete buttons for own comment */}
+                    {currentUser && comment.user?.id === currentUser.id && (
+                      <div style={{ display: 'flex', gap: 8 }}>
+                        <button className="btn btn-link" onClick={() => handleEditComment(comment)} title="Edit"><Edit2 size={16} /></button>
+                        <button className="btn btn-link" onClick={() => handleDeleteComment(comment)} title="Delete"><Trash2 size={16} /></button>
+                      </div>
+                    )}
+                  </div>
+                  {editingCommentId === comment.id ? (
+                    <div className="edit-comment-form">
+                      <textarea
+                        value={editingContent[comment.id] || ""}
+                        onChange={e => setEditingContent((prev) => ({ ...prev, [comment.id]: e.target.value }))}
+                        className="comment-input"
+                        rows="2"
+                      />
+                      <div className="reply-actions">
+                        <button className="btn btn-link" onClick={() => { setEditingCommentId(null); setEditingContent((prev) => { const n = { ...prev }; delete n[comment.id]; return n }) }}>Cancel</button>
+                        <button className="btn btn-primary" onClick={() => handleSaveEdit(comment)} disabled={!editingContent[comment.id]?.trim()}>Save</button>
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="comment-content">{comment.content}</p>
+                  )}
+                  {/* Reply button */}
+                  <button 
+                    className="btn btn-link reply-btn"
+                    onClick={() => setReplyingTo(comment)}
+                  >
+                    <CornerUpLeft size={14} /> Reply
+                  </button>
+                  {/* Replies */}
+                  {comment.replies && comment.replies.length > 0 && (
+                    <div className="replies-list">
+                      {comment.replies.map((reply) => (
+                        <div key={reply.id} className="reply-item">
+                          <div className="comment-header">
+                            <div className="comment-author-info">
+                              {reply.user?.profilePhoto ? (
+                                <img 
+                                  src={reply.user.profilePhoto} 
+                                  alt={reply.user.name} 
+                                  className="comment-author-avatar"
+                                />
+                              ) : (
+                                <div className="comment-author-avatar-placeholder">
+                                  {reply.user?.name?.charAt(0)}
+                                </div>
+                              )}
+                              <span className="comment-author">{reply.user?.name || 'Unknown User'}</span>
+                              {reply.isEdited && <span style={{ fontSize: '0.8em', color: '#888', marginLeft: 8 }}>(edited)</span>}
+                            </div>
+                            <span className="comment-time">
+                              {formatDate(reply.createdAt)} at {formatTime(reply.createdAt)}
+                            </span>
+                            {/* Edit/Delete buttons for own reply */}
+                            {currentUser && reply.user?.id === currentUser.id && (
+                              <div style={{ display: 'flex', gap: 8 }}>
+                                <button className="btn btn-link" onClick={() => handleEditComment(reply)} title="Edit"><Edit2 size={16} /></button>
+                                <button className="btn btn-link" onClick={() => handleDeleteComment(reply)} title="Delete"><Trash2 size={16} /></button>
+                              </div>
+                            )}
+                          </div>
+                          {editingCommentId === reply.id ? (
+                            <div className="edit-comment-form">
+                              <textarea
+                                value={editingContent[reply.id] || ""}
+                                onChange={e => setEditingContent((prev) => ({ ...prev, [reply.id]: e.target.value }))}
+                                className="comment-input"
+                                rows="2"
+                              />
+                              <div className="reply-actions">
+                                <button className="btn btn-link" onClick={() => { setEditingCommentId(null); setEditingContent((prev) => { const n = { ...prev }; delete n[reply.id]; return n }) }}>Cancel</button>
+                                <button className="btn btn-primary" onClick={() => handleSaveEdit(reply)} disabled={!editingContent[reply.id]?.trim()}>Save</button>
+                              </div>
+                            </div>
+                          ) : (
+                            <p className="comment-content">{reply.content}</p>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {/* Reply form */}
+                  {replyingTo?.id === comment.id && (
+                    <form onSubmit={handleSubmitReply} className="reply-form">
+                      <textarea
+                        placeholder="Write a reply..."
+                        value={replyContent}
+                        onChange={handleReplyChange}
+                        className="comment-input"
+                        rows="2"
+                      ></textarea>
+                      <div className="reply-actions">
+                        <button 
+                          type="button" 
+                          className="btn btn-link"
+                          onClick={() => {
+                            setReplyingTo(null)
+                            setReplyContent("")
+                          }}
+                        >
+                          Cancel
+                        </button>
+                        <button 
+                          type="submit" 
+                          className="btn btn-primary"
+                          disabled={!replyContent.trim()}
+                        >
+                          <Send size={14} /> Reply
+                        </button>
+                      </div>
+                    </form>
+                  )}
+                </div>
+              ))
+            ) : (
+              <div className="no-comments">No comments yet</div>
+            )}
+          </div>
+
+          <form onSubmit={handleSubmitComment} className="comment-form">
+            <textarea
+              placeholder="Add a comment..."
+              value={newComment}
+              onChange={handleCommentChange}
+              className="comment-input"
+              rows="3"
+            ></textarea>
+            <button 
+              type="submit" 
+              className="btn btn-primary comment-submit" 
+              disabled={!newComment.trim()}
+            >
+              <Send size={16} /> Send
+            </button>
+          </form>
+        </div>
+      )}
+
       {isModalOpen && (
         <TaskModal
           task={currentTask}
@@ -483,6 +808,14 @@ const ProjectDetails = () => {
           onSave={handleSaveTask}
         />
       )}
+
+      <ConfirmModal
+        open={deleteConfirm.open}
+        title="Delete Comment"
+        message="Are you sure you want to delete this comment? This action cannot be undone."
+        onConfirm={confirmDeleteComment}
+        onCancel={() => setDeleteConfirm({ open: false, comment: null })}
+      />
     </div>
   )
 }
@@ -584,6 +917,45 @@ function getPriorityTextColor(priority) {
     case 'low': return '#237804';
     default: return '#222';
   }
+}
+
+/* Comment Edit/Delete UI Enhancements */
+const styles = `
+.edit-comment-form {
+  background: #f7fafd;
+  border: 1px solid #dbeafe;
+  border-radius: 8px;
+  padding: 12px;
+  margin: 8px 0 12px 0;
+}
+.comment-header .btn-link {
+  background: none;
+  border: none;
+  padding: 4px;
+  margin-left: 4px;
+  cursor: pointer;
+  color: #888;
+  transition: color 0.2s;
+}
+.comment-header .btn-link:hover {
+  color: #2563eb;
+  background: #e0e7ff;
+  border-radius: 4px;
+}
+.reply-actions .btn-link {
+  color: #888;
+}
+.reply-actions .btn-link:hover {
+  color: #2563eb;
+  background: #e0e7ff;
+  border-radius: 4px;
+}
+`;
+if (typeof document !== 'undefined' && !document.getElementById('comment-edit-style')) {
+  const style = document.createElement('style');
+  style.id = 'comment-edit-style';
+  style.innerHTML = styles;
+  document.head.appendChild(style);
 }
 
 export default ProjectDetails

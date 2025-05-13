@@ -337,3 +337,145 @@
     }
   }
   
+  /* Project Comments Styles */
+  .project-comments {
+    margin-top: 2rem;
+    padding: 1.5rem;
+  }
+  
+  .comments-title {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 1.5rem;
+    color: var(--text-primary);
+  }
+  
+  .comments-list {
+    margin-bottom: 1.5rem;
+  }
+  
+  .comment-item {
+    padding: 1rem;
+    border-bottom: 1px solid var(--border-color);
+  }
+  
+  .comment-item:last-child {
+    border-bottom: none;
+  }
+  
+  .comment-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.5rem;
+  }
+  
+  .comment-author-info {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+  
+  .comment-author-avatar {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    object-fit: cover;
+  }
+  
+  .comment-author-avatar-placeholder {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background-color: var(--primary-color);
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 500;
+  }
+  
+  .comment-author {
+    font-weight: 500;
+    color: var(--text-primary);
+  }
+  
+  .comment-time {
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+  }
+  
+  .comment-content {
+    margin: 0.5rem 0;
+    color: var(--text-primary);
+    line-height: 1.5;
+  }
+  
+  .reply-btn {
+    padding: 0;
+    color: var(--text-secondary);
+    font-size: 0.875rem;
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+  }
+  
+  .reply-btn:hover {
+    color: var(--primary-color);
+  }
+  
+  .replies-list {
+    margin-left: 2.5rem;
+    margin-top: 1rem;
+    padding-left: 1rem;
+    border-left: 2px solid var(--border-color);
+  }
+  
+  .reply-item {
+    padding: 0.75rem 0;
+  }
+  
+  .reply-form {
+    margin-left: 2.5rem;
+    margin-top: 1rem;
+  }
+  
+  .comment-form {
+    margin-top: 1.5rem;
+  }
+  
+  .comment-input {
+    width: 100%;
+    padding: 0.75rem;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    resize: vertical;
+    margin-bottom: 0.75rem;
+    font-family: inherit;
+  }
+  
+  .comment-input:focus {
+    outline: none;
+    border-color: var(--primary-color);
+  }
+  
+  .comment-submit {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+  
+  .reply-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.75rem;
+    margin-top: 0.5rem;
+  }
+  
+  .no-comments {
+    text-align: center;
+    color: var(--text-secondary);
+    padding: 2rem 0;
+  }
+  

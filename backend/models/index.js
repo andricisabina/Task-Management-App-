@@ -1,4 +1,4 @@
-const sequelize = require('../config/database');
+const sequelize = require('../config/sequelize');
 const User = require('./userModel');
 const Department = require('./departmentModel');
 const PersonalProject = require('./personalProjectModel');
@@ -39,6 +39,9 @@ PersonalTask.belongsTo(PersonalProject, { foreignKey: 'projectId' });
 ProfessionalProject.hasMany(ProfessionalTask, { foreignKey: 'projectId' });
 ProfessionalTask.belongsTo(ProfessionalProject, { foreignKey: 'projectId' });
 
+ProfessionalProject.hasMany(Comment, { foreignKey: 'projectId' });
+Comment.belongsTo(ProfessionalProject, { foreignKey: 'projectId' });
+
 // Task relationships
 ProfessionalTask.hasMany(Comment, { foreignKey: 'taskId' });
 Comment.belongsTo(ProfessionalTask, { foreignKey: 'taskId' });
@@ -47,7 +50,28 @@ ProfessionalTask.hasMany(Attachment, { foreignKey: 'taskId' });
 Attachment.belongsTo(ProfessionalTask, { foreignKey: 'taskId' });
 
 // Many-to-many relationship between Users and ProfessionalProjects
-const ProjectMember = sequelize.define('ProjectMember', {}, { 
+const ProjectMember = sequelize.define('ProjectMember', {
+  departmentId: {
+    type: sequelize.Sequelize.INTEGER,
+    allowNull: true,
+    references: { model: 'Departments', key: 'id' }
+  },
+  role: {
+    type: sequelize.Sequelize.ENUM('manager', 'leader', 'member'),
+    allowNull: false,
+    defaultValue: 'member'
+  },
+  status: {
+    type: sequelize.Sequelize.ENUM('invited', 'accepted', 'declined'),
+    allowNull: false,
+    defaultValue: 'invited'
+  },
+  invitedById: {
+    type: sequelize.Sequelize.INTEGER,
+    allowNull: true,
+    references: { model: 'Users', key: 'id' }
+  }
+}, { 
   timestamps: true,
   tableName: 'ProjectMembers'
 });
@@ -64,11 +88,34 @@ ProfessionalProject.belongsToMany(User, {
   otherKey: 'userId'
 });
 
+// Add direct associations for eager loading
+ProfessionalProject.hasMany(ProjectMember, { foreignKey: 'projectId', as: 'ProjectMembers' });
+ProjectMember.belongsTo(ProfessionalProject, { foreignKey: 'projectId' });
+
+// ProjectMember associations
+ProjectMember.belongsTo(Department, { foreignKey: 'departmentId' });
+Department.hasMany(ProjectMember, { foreignKey: 'departmentId' });
+ProjectMember.belongsTo(User, { as: 'invitedBy', foreignKey: 'invitedById' });
+User.hasMany(ProjectMember, { as: 'invitationsSent', foreignKey: 'invitedById' });
+
+// Add association for member user
+ProjectMember.belongsTo(User, { foreignKey: 'userId', as: 'member' });
+
 // Many-to-many relationship between Departments and ProfessionalProjects
-const ProjectDepartment = sequelize.define('ProjectDepartment', {}, { 
+const ProjectDepartment = sequelize.define('ProjectDepartment', {
+  leaderId: {
+    type: sequelize.Sequelize.INTEGER,
+    allowNull: true,
+    references: { model: 'Users', key: 'id' }
+  }
+}, { 
   timestamps: true,
   tableName: 'ProjectDepartments'
 });
+
+// ProjectDepartment associations
+ProjectDepartment.belongsTo(User, { as: 'leader', foreignKey: 'leaderId' });
+User.hasMany(ProjectDepartment, { as: 'ledDepartments', foreignKey: 'leaderId' });
 
 Department.belongsToMany(ProfessionalProject, { 
   through: ProjectDepartment,

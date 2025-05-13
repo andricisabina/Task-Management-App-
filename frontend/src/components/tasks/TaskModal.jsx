@@ -11,8 +11,9 @@ const TaskModal = ({ task, isProfessional = false, teamMembers = [], onClose, on
     priority: "medium",
     dueDate: "",
     dueTime: "",
-    status: "todo",
+    status: "pending",
     assignedTo: "",
+    assignedToEmail: "",
   })
 
   useEffect(() => {
@@ -31,8 +32,9 @@ const TaskModal = ({ task, isProfessional = false, teamMembers = [], onClose, on
         priority: task.priority || "medium",
         dueDate,
         dueTime,
-        status: task.status || "todo",
+        status: task.status || "pending",
         assignedTo: task.assignedTo || "",
+        assignedToEmail: task.assignedToEmail || "",
       })
     } else {
       // Set default due date to tomorrow
@@ -42,7 +44,7 @@ const TaskModal = ({ task, isProfessional = false, teamMembers = [], onClose, on
         ...formData,
         dueDate: tomorrow.toISOString().split("T")[0],
         dueTime: "09:00",
-        status: "todo"
+        status: "pending"
       })
     }
   }, [task])
@@ -67,6 +69,11 @@ const TaskModal = ({ task, isProfessional = false, teamMembers = [], onClose, on
       dueDate: dueDateTime,
     }
     delete submitData.dueTime
+    // For professional tasks, use assignedToEmail
+    if (isProfessional) {
+      submitData.assignedToEmail = formData.assignedToEmail || ''
+      delete submitData.assignedTo
+    }
     onSave(submitData)
   }
 
@@ -154,23 +161,18 @@ const TaskModal = ({ task, isProfessional = false, teamMembers = [], onClose, on
 
           {isProfessional && (
             <div className="form-group">
-              <label htmlFor="assignedTo" className="form-label">
-                Assigned To
+              <label htmlFor="assignedToEmail" className="form-label">
+                Assign To (Email)
               </label>
-              <select
-                id="assignedTo"
-                name="assignedTo"
+              <input
+                type="email"
+                id="assignedToEmail"
+                name="assignedToEmail"
                 className="form-input"
-                value={formData.assignedTo}
+                value={formData.assignedToEmail || ''}
                 onChange={handleChange}
-              >
-                <option value="">Select team member</option>
-                {teamMembers.map((member, index) => (
-                  <option key={index} value={member}>
-                    {member}
-                  </option>
-                ))}
-              </select>
+                placeholder="Enter user email"
+              />
             </div>
           )}
 

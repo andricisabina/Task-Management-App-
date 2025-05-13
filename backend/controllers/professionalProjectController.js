@@ -1,7 +1,8 @@
-const { ProfessionalProject, ProfessionalTask, User, Department, ProjectMember, sequelize } = require('../models');
+const { ProfessionalProject, ProfessionalTask, User, Department, ProjectMember, sequelize, Comment } = require('../models');
 const asyncHandler = require('../middleware/asyncHandler');
 const ErrorResponse = require('../utils/errorResponse');
 const { Op } = require('sequelize');
+const sendEmail = require('../utils/sendEmail');
 
 // @desc    Get all professional projects user has access to
 // @route   GET /api/professional-projects
@@ -9,17 +10,27 @@ const { Op } = require('sequelize');
 exports.getProfessionalProjects = asyncHandler(async (req, res, next) => {
   try {
     const userId = req.user.id;
+    // Find all projects where user is creator (manager) or assigned as leader
     const projects = await ProfessionalProject.findAll({
+      where: {
+        [Op.or]: [
+          { creatorId: userId },
+          { '$ProjectMembers.userId$': userId, '$ProjectMembers.role$': 'leader' }
+        ]
+      },
       include: [
         {
           model: User,
           as: 'creator',
-          attributes: ['id', 'username', 'email']
+          attributes: ['id', 'name', 'email']
         },
         {
-          model: User,
-          through: { attributes: [] },
-          attributes: ['id', 'username', 'email']
+          model: ProjectMember,
+          as: 'ProjectMembers',
+          attributes: ['userId', 'departmentId', 'role', 'status'],
+          where: { role: 'leader' },
+          required: false,
+          include: [{ model: User, as: 'member', attributes: ['id', 'name', 'email'] }]
         },
         {
           model: Department,
@@ -27,13 +38,7 @@ exports.getProfessionalProjects = asyncHandler(async (req, res, next) => {
           through: { attributes: [] },
           attributes: ['id', 'name', 'color']
         }
-      ],
-      where: {
-        [Op.or]: [
-          { creatorId: userId },
-          { '$Users.id$': userId }
-        ]
-      }
+      ]
     });
 
     res.status(200).json({
@@ -54,29 +59,33 @@ exports.getProfessionalProject = asyncHandler(async (req, res, next) => {
   const { id } = req.params;
   const userId = req.user.id;
 
+  // Only allow access if user is creator or assigned as leader
   const project = await ProfessionalProject.findOne({
     where: {
       id,
       [Op.or]: [
         { creatorId: userId },
-        { '$Users.id$': userId }
+        { '$ProjectMembers.userId$': userId, '$ProjectMembers.role$': 'leader' }
       ]
     },
     include: [
       {
         model: User,
         as: 'creator',
-        attributes: ['id', 'username', 'email']
+        attributes: ['id', 'name', 'email']
       },
       {
-        model: User,
-        through: { attributes: [] },
-        attributes: ['id', 'username', 'email']
+        model: ProjectMember,
+        as: 'ProjectMembers',
+        attributes: ['userId', 'departmentId', 'role', 'status'],
+        where: { role: 'leader' },
+        required: false,
+        include: [{ model: User, as: 'member', attributes: ['id', 'name', 'email'] }]
       },
       {
         model: Department,
         as: 'departments',
-        through: { attributes: [] },
+        through: { attributes: ['leaderId'] },
         attributes: ['id', 'name', 'color']
       },
       {
@@ -90,20 +99,6 @@ exports.getProfessionalProject = asyncHandler(async (req, res, next) => {
     return next(new ErrorResponse(`Project not found with id of ${id}`, 404));
   }
   
-  // Check if user has access to this project
-  const isMember = await ProjectMember.findOne({
-    where: {
-      userId: req.user.id,
-      projectId: id
-    }
-  });
-  
-  const isCreator = project.creatorId === req.user.id;
-  
-  if (!isMember && !isCreator && req.user.role !== 'admin') {
-    return next(new ErrorResponse(`User not authorized to view this project`, 401));
-  }
-  
   res.status(200).json({
     success: true,
     data: project
@@ -114,77 +109,70 @@ exports.getProfessionalProject = asyncHandler(async (req, res, next) => {
 // @route   POST /api/professional-projects
 // @access  Private
 exports.createProfessionalProject = asyncHandler(async (req, res, next) => {
-  const { title, description, startDate, dueDate, status, priority, color, members, departments } = req.body;
+  const { title, description, startDate, dueDate, status, priority, color, departments } = req.body;
   const creatorId = req.user.id;
-  
   const transaction = await sequelize.transaction();
-  
+
   try {
+    // 1. Create the project
     const project = await ProfessionalProject.create({
-      title,
-      description,
-      startDate,
-      dueDate,
-      status,
-      priority,
-      color,
-      creatorId
+      title, description, startDate, dueDate, status, priority, color, creatorId
     }, { transaction });
-    
-    // Add members if specified
-    if (members && Array.isArray(members)) {
-      await project.addUsers(members, { transaction });
-    }
-    
-    // Add departments if specified
-    if (departments && Array.isArray(departments)) {
-      await project.addDepartments(departments, { transaction });
-    }
-    
-    // Add creator as a project member
+
+    // 2. Add creator as manager
     await ProjectMember.create({
-      userId: req.user.id,
-      projectId: project.id
+      userId: creatorId,
+      projectId: project.id,
+      role: 'manager',
+      status: 'accepted'
     }, { transaction });
-    
-    // Add other members if specified
-    if (req.body.members && req.body.members.length > 0) {
-      const membersToAdd = req.body.members.map(userId => ({
-        userId,
-        projectId: project.id
-      }));
-      
-      await ProjectMember.bulkCreate(membersToAdd, { transaction });
+
+    // 3. For each department: add ProjectDepartment, invite leader
+    for (const dept of departments) {
+      // dept: { departmentId, leaderEmail }
+      let leader = await User.findOne({ where: { email: dept.leaderEmail } });
+      if (!leader) {
+        // Optionally, create a new user with this email
+        leader = await User.create({ email: dept.leaderEmail, name: dept.leaderEmail.split('@')[0] }, { transaction });
+      }
+
+      // Add to ProjectDepartment with leaderId
+      await project.addDepartment(dept.departmentId, { through: { leaderId: leader.id }, transaction });
+
+      // Add leader as ProjectMember (role: 'leader', status: 'invited')
+      await ProjectMember.create({
+        userId: leader.id,
+        projectId: project.id,
+        departmentId: dept.departmentId,
+        role: 'leader',
+        status: 'invited',
+        invitedById: creatorId
+      }, { transaction });
+
+      // Send invitation email (sample)
+      try {
+        await sendEmail({
+          to: leader.email,
+          subject: `Invitation to lead department in project: ${title}`,
+          text: `Hello ${leader.name},\n\nYou have been invited to be the leader of the department in the project: ${title}.\nPlease log in to accept the invitation.\n\nThank you!`
+        });
+      } catch (emailErr) {
+        console.error('Failed to send leader invitation email:', emailErr);
+      }
     }
-    
+
     await transaction.commit();
-    
-    // Fetch project with relationships
+
+    // Fetch and return the created project with relationships
     const createdProject = await ProfessionalProject.findByPk(project.id, {
       include: [
-        {
-          model: User,
-          as: 'creator',
-          attributes: ['id', 'username', 'email']
-        },
-        {
-          model: User,
-          through: { attributes: [] },
-          attributes: ['id', 'username', 'email']
-        },
-        {
-          model: Department,
-          as: 'departments',
-          through: { attributes: [] },
-          attributes: ['id', 'name', 'color']
-        }
+        { model: User, as: 'creator', attributes: ['id', 'name', 'email'] },
+        { model: User, through: { attributes: [] }, attributes: ['id', 'name', 'email'] },
+        { model: Department, as: 'departments', through: { attributes: ['leaderId'] }, attributes: ['id', 'name', 'color'] }
       ]
     });
-    
-    res.status(201).json({
-      success: true,
-      data: createdProject
-    });
+
+    res.status(201).json({ success: true, data: createdProject });
   } catch (error) {
     await transaction.rollback();
     next(error);
@@ -256,12 +244,12 @@ exports.updateProfessionalProject = asyncHandler(async (req, res, next) => {
         {
           model: User,
           as: 'creator',
-          attributes: ['id', 'username', 'email']
+          attributes: ['id', 'name', 'email']
         },
         {
           model: User,
           through: { attributes: [] },
-          attributes: ['id', 'username', 'email']
+          attributes: ['id', 'name', 'email']
         },
         {
           model: Department,
@@ -469,4 +457,137 @@ exports.getProjectStats = asyncHandler(async (req, res, next) => {
       completionRate: project.completionRate
     }
   });
+});
+
+// @desc    Get all comments for a professional project (with replies)
+// @route   GET /api/professional-projects/:id/comments
+// @access  Private
+exports.getProjectComments = asyncHandler(async (req, res, next) => {
+  const projectId = req.params.id;
+  // Only members or creator can view comments
+  const project = await ProfessionalProject.findByPk(projectId, {
+    include: [{ model: User, attributes: ['id'] }]
+  });
+  if (!project) {
+    return next(new ErrorResponse(`Project not found with id of ${projectId}`, 404));
+  }
+  const isMember = project.Users.some(u => u.id === req.user.id);
+  const isCreator = project.creatorId === req.user.id;
+  if (!isMember && !isCreator && req.user.role !== 'admin') {
+    return next(new ErrorResponse('Not authorized to view comments for this project', 401));
+  }
+  // Fetch all comments for this project (taskId is null for project comments)
+  const comments = await Comment.findAll({
+    where: { projectId, parentId: null },
+    include: [{ model: User, attributes: ['id', 'name', 'profilePhoto'] }],
+    order: [['createdAt', 'ASC']]
+  });
+  // Fetch replies for each comment
+  const commentIds = comments.map(c => c.id);
+  const replies = await Comment.findAll({
+    where: { parentId: commentIds },
+    include: [{ model: User, attributes: ['id', 'name', 'profilePhoto'] }],
+    order: [['createdAt', 'ASC']]
+  });
+  // Attach replies to parent comments
+  const repliesByParent = {};
+  replies.forEach(reply => {
+    if (!repliesByParent[reply.parentId]) repliesByParent[reply.parentId] = [];
+    repliesByParent[reply.parentId].push(reply);
+  });
+  // Normalize user field for comments and replies
+  const commentsWithReplies = comments.map(comment => {
+    const c = comment.toJSON();
+    c.user = c.user || c.User;
+    delete c.User;
+    c.replies = (repliesByParent[comment.id] || []).map(reply => {
+      const r = reply.toJSON();
+      r.user = r.user || r.User;
+      delete r.User;
+      return r;
+    });
+    return c;
+  });
+  res.status(200).json({ success: true, data: commentsWithReplies });
+});
+
+// @desc    Add a comment to a professional project
+// @route   POST /api/professional-projects/:id/comments
+// @access  Private
+exports.addProjectComment = asyncHandler(async (req, res, next) => {
+  const projectId = req.params.id;
+  const { content, parentId } = req.body;
+  // Only members or creator can comment
+  const project = await ProfessionalProject.findByPk(projectId, {
+    include: [{ model: User, attributes: ['id'] }]
+  });
+  if (!project) {
+    return next(new ErrorResponse(`Project not found with id of ${projectId}`, 404));
+  }
+  const isMember = project.Users.some(u => u.id === req.user.id);
+  const isCreator = project.creatorId === req.user.id;
+  if (!isMember && !isCreator && req.user.role !== 'admin') {
+    return next(new ErrorResponse('Not authorized to comment on this project', 401));
+  }
+  // Create comment
+  const comment = await Comment.create({
+    content,
+    userId: req.user.id,
+    projectId,
+    parentId: parentId || null
+  });
+  // Fetch comment with user data
+  const commentWithUser = await Comment.findByPk(comment.id, {
+    include: [{ model: User, attributes: ['id', 'name', 'profilePhoto'] }]
+  });
+  // Normalize user field
+  const c = commentWithUser.toJSON();
+  c.user = c.user || c.User;
+  delete c.User;
+  res.status(201).json({ success: true, data: c });
+});
+
+// @desc    Edit a comment on a professional project
+// @route   PUT /api/professional-projects/:projectId/comments/:commentId
+// @access  Private
+exports.editProjectComment = asyncHandler(async (req, res, next) => {
+  const { commentId } = req.params;
+  const { content } = req.body;
+  const comment = await Comment.findByPk(commentId);
+  if (!comment) {
+    return next(new ErrorResponse('Comment not found', 404));
+  }
+  // Only author or admin can edit
+  if (comment.userId !== req.user.id && req.user.role !== 'admin') {
+    return next(new ErrorResponse('Not authorized to edit this comment', 401));
+  }
+  comment.content = content;
+  comment.isEdited = true;
+  await comment.save();
+  // Fetch with user
+  const commentWithUser = await Comment.findByPk(comment.id, {
+    include: [{ model: User, attributes: ['id', 'name', 'profilePhoto'] }]
+  });
+  // Normalize user field
+  const c = commentWithUser.toJSON();
+  c.user = c.user || c.User;
+  delete c.User;
+  res.status(200).json({ success: true, data: c });
+});
+
+// @desc    Delete a comment on a professional project
+// @route   DELETE /api/professional-projects/:projectId/comments/:commentId
+// @access  Private
+exports.deleteProjectComment = asyncHandler(async (req, res, next) => {
+  const { commentId } = req.params;
+  const comment = await Comment.findByPk(commentId);
+  if (!comment) {
+    return next(new ErrorResponse('Comment not found', 404));
+  }
+  // Only author or admin can delete
+  if (comment.userId !== req.user.id && req.user.role !== 'admin') {
+    return next(new ErrorResponse('Not authorized to delete this comment', 401));
+  }
+  await comment.destroy();
+  res.status(200).json({ success: true, data: {} });
 });
