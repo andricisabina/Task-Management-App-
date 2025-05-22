@@ -110,23 +110,6 @@ const ProjectModal = ({ project, isProfessional = false, onClose, onSave }) => {
             ></textarea>
           </div>
 
-          {!isProfessional && (
-            <div className="form-group">
-              <label htmlFor="team" className="form-label">
-                Team Members (comma separated)
-              </label>
-              <input
-                type="text"
-                id="team"
-                name="team"
-                className="form-input"
-                value={formData.team}
-                onChange={handleChange}
-                placeholder="e.g. John Doe, Jane Smith"
-              />
-            </div>
-          )}
-
           {isProfessional && (
             <div className="form-group">
               <label className="form-label">Departments Involved</label>

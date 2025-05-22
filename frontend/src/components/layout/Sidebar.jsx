@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import { NavLink, useNavigate } from "react-router-dom"
-import { User, Home, CheckSquare, Folder, Briefcase, BarChart2, Menu, X } from "react-feather"
+import { User, Home, CheckSquare, Folder, Briefcase, BarChart2, Menu, X, Bell, Calendar } from "react-feather"
 import { useAuth } from "../../context/AuthContext"
 import Logo from "../common/Logo"
 import "./Sidebar.css"
@@ -39,6 +39,11 @@ const Sidebar = () => {
             <span>Home</span>
           </NavLink>
 
+          <NavLink to="/calendar" className="nav-item">
+            <Calendar className="nav-icon" />
+            <span>Calendar</span>
+          </NavLink>
+
           <NavLink to="/tasks" className="nav-item">
             <CheckSquare className="nav-icon" />
             <span>My Tasks</span>
@@ -54,10 +59,15 @@ const Sidebar = () => {
             <span>Professional Projects</span>
           </NavLink>
 
-          <button className="nav-item report-btn">
+          <NavLink to="/notifications" className="nav-item">
+            <Bell className="nav-icon" />
+            <span>Notifications</span>
+          </NavLink>
+
+          <NavLink to="/reports/productivity" className="nav-item">
             <BarChart2 className="nav-icon" />
-            <span>Productivity report</span>
-          </button>
+            <span>Productivity Report</span>
+          </NavLink>
         </nav>
 
         <div className="sidebar-footer">

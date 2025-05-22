@@ -4,16 +4,20 @@ import { useState, useEffect } from "react"
 import { X } from "react-feather"
 import "./TaskModal.css"
 
-const TaskModal = ({ task, isProfessional = false, teamMembers = [], onClose, onSave }) => {
+const TaskModal = ({ task, isProfessional = false, teamMembers = [], departments = [], onClose, onSave }) => {
+  console.log("TaskModal departments:", departments);
+  console.log("isProfessional:", isProfessional, "departments.length:", departments.length);
+
   const [formData, setFormData] = useState({
     title: "",
     description: "",
     priority: "medium",
     dueDate: "",
     dueTime: "",
-    status: "pending",
     assignedTo: "",
     assignedToEmail: "",
+    departmentId: departments.length > 0 ? departments[0].id : "",
+    status: "pending"
   })
 
   useEffect(() => {
@@ -32,9 +36,10 @@ const TaskModal = ({ task, isProfessional = false, teamMembers = [], onClose, on
         priority: task.priority || "medium",
         dueDate,
         dueTime,
-        status: task.status || "pending",
         assignedTo: task.assignedTo || "",
         assignedToEmail: task.assignedToEmail || "",
+        departmentId: task.departmentId || (departments.length > 0 ? departments[0].id : ""),
+        status: task.status || "pending"
       })
     } else {
       // Set default due date to tomorrow
@@ -44,6 +49,7 @@ const TaskModal = ({ task, isProfessional = false, teamMembers = [], onClose, on
         ...formData,
         dueDate: tomorrow.toISOString().split("T")[0],
         dueTime: "09:00",
+        departmentId: departments.length > 0 ? departments[0].id : "",
         status: "pending"
       })
     }
@@ -134,6 +140,26 @@ const TaskModal = ({ task, isProfessional = false, teamMembers = [], onClose, on
                 <option value="urgent">Urgent</option>
               </select>
             </div>
+            {isProfessional && (
+              <div className="form-group">
+                <label htmlFor="status" className="form-label">
+                  Status
+                </label>
+                <select
+                  id="status"
+                  name="status"
+                  className="form-input"
+                  value={formData.status}
+                  onChange={handleChange}
+                >
+                  <option value="pending">Pending</option>
+                  <option value="in-progress">In Progress</option>
+                  <option value="review">Review</option>
+                  <option value="completed">Completed</option>
+                  <option value="rejected">Rejected</option>
+                </select>
+              </div>
+            )}
             <div className="form-group">
               <label htmlFor="dueDate" className="form-label">
                 Due Date
@@ -157,6 +183,28 @@ const TaskModal = ({ task, isProfessional = false, teamMembers = [], onClose, on
                 required
               />
             </div>
+            {isProfessional && departments.length > 0 && (
+              <>
+                <div style={{color: 'red'}}>DEBUG: Department dropdown should be here</div>
+                <div className="form-group">
+                  <label htmlFor="departmentId" className="form-label">
+                    Department
+                  </label>
+                  <select
+                    id="departmentId"
+                    name="departmentId"
+                    className="form-input"
+                    value={formData.departmentId}
+                    onChange={handleChange}
+                    required
+                  >
+                    {departments.map(dept => (
+                      <option key={dept.id} value={dept.id}>{dept.name}</option>
+                    ))}
+                  </select>
+                </div>
+              </>
+            )}
           </div>
 
           {isProfessional && (
@@ -180,10 +228,15 @@ const TaskModal = ({ task, isProfessional = false, teamMembers = [], onClose, on
             <button type="button" className="btn btn-secondary" onClick={onClose}>
               Cancel
             </button>
-            <button type="submit" className="btn btn-primary">
+            <button type="submit" className="btn btn-primary" disabled={isProfessional && departments.length === 0}>
               {task ? "Update Task" : "Create Task"}
             </button>
           </div>
+          {isProfessional && departments.length === 0 && (
+            <div style={{ color: 'red', marginTop: 8 }}>
+              No departments available. Please add departments to the project first.
+            </div>
+          )}
         </form>
       </div>
     </div>

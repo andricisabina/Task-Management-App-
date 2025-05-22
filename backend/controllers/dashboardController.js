@@ -731,6 +731,35 @@ const {
       }
     });
     
+    // Get department performance metrics
+    const departmentStats = await ProfessionalTask.findAll({
+      where: {
+        departmentId: departmentId,
+        status: { [Op.notIn]: ['completed', 'cancelled', 'rejected'] }
+      },
+      attributes: [
+        'departmentId',
+        [sequelize.fn('COUNT', sequelize.col('id')), 'totalTasks'],
+        [sequelize.fn('SUM', sequelize.literal('CASE WHEN status = "completed" THEN 1 ELSE 0 END')), 'completedTasks'],
+        [sequelize.fn('AVG', sequelize.literal('CASE WHEN status = "completed" THEN TIMESTAMPDIFF(HOUR, createdAt, completedAt) ELSE NULL END')), 'avgCompletionTime'],
+        [sequelize.fn('COUNT', sequelize.literal('CASE WHEN dueDate < NOW() AND status NOT IN ("completed", "cancelled", "rejected") THEN 1 ELSE NULL END')), 'overdueTasks']
+      ],
+      include: [{
+        model: Department,
+        attributes: ['name', 'color']
+      }],
+      group: ['departmentId'],
+      raw: true
+    });
+
+    // Calculate department performance scores
+    const departmentPerformance = departmentStats.map(dept => ({
+      ...dept,
+      completionRate: (dept.completedTasks / dept.totalTasks) * 100,
+      onTimeRate: ((dept.totalTasks - dept.overdueTasks) / dept.totalTasks) * 100,
+      performanceScore: ((dept.completedTasks / dept.totalTasks) * 0.6 + ((dept.totalTasks - dept.overdueTasks) / dept.totalTasks) * 0.4) * 100
+    }));
+    
     res.status(200).json({
       success: true,
       data: {
@@ -748,7 +777,8 @@ const {
         totalCompletedTasks,
         completionRate: totalAssignedTasks > 0 ? (totalCompletedTasks / totalAssignedTasks) * 100 : 0,
         onTimeCompletionRate: totalCompletedTasks > 0 ? (onTimeCompletedTasks / totalCompletedTasks) * 100 : 0,
-        overdueTasks
+        overdueTasks,
+        departmentPerformance
       }
     });
   });

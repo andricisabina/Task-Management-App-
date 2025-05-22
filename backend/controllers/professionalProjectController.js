@@ -1,4 +1,4 @@
-const { ProfessionalProject, ProfessionalTask, User, Department, ProjectMember, sequelize, Comment } = require('../models');
+const { ProfessionalProject, ProfessionalTask, User, Department, ProjectMember, sequelize, Comment, Notification } = require('../models');
 const asyncHandler = require('../middleware/asyncHandler');
 const ErrorResponse = require('../utils/errorResponse');
 const { Op } = require('sequelize');
@@ -65,7 +65,7 @@ exports.getProfessionalProject = asyncHandler(async (req, res, next) => {
       id,
       [Op.or]: [
         { creatorId: userId },
-        { '$ProjectMembers.userId$': userId, '$ProjectMembers.role$': 'leader' }
+        { '$ProjectMembers.userId$': userId }
       ]
     },
     include: [
@@ -78,7 +78,6 @@ exports.getProfessionalProject = asyncHandler(async (req, res, next) => {
         model: ProjectMember,
         as: 'ProjectMembers',
         attributes: ['userId', 'departmentId', 'role', 'status'],
-        where: { role: 'leader' },
         required: false,
         include: [{ model: User, as: 'member', attributes: ['id', 'name', 'email'] }]
       },
@@ -90,9 +89,10 @@ exports.getProfessionalProject = asyncHandler(async (req, res, next) => {
       },
       {
         model: ProfessionalTask,
-        order: [['dueDate', 'ASC']]
+        as: 'ProfessionalTasks'
       }
-    ]
+    ],
+    order: [[{ model: ProfessionalTask, as: 'ProfessionalTasks' }, 'dueDate', 'ASC']]
   });
   
   if (!project) {
@@ -590,4 +590,90 @@ exports.deleteProjectComment = asyncHandler(async (req, res, next) => {
   }
   await comment.destroy();
   res.status(200).json({ success: true, data: {} });
+});
+
+// @desc    Accept project leader invitation
+// @route   POST /api/professional-projects/:id/accept-leader
+// @access  Private
+exports.acceptLeaderInvitation = asyncHandler(async (req, res, next) => {
+  const project = await ProfessionalProject.findByPk(req.params.id);
+  if (!project) {
+    return next(new ErrorResponse(`Project not found with id of ${req.params.id}`, 404));
+  }
+
+  // Find the project member record
+  const projectMember = await ProjectMember.findOne({
+    where: {
+      projectId: project.id,
+      userId: req.user.id,
+      role: 'leader',
+      status: 'invited'
+    }
+  });
+
+  if (!projectMember) {
+    return next(new ErrorResponse('No pending leader invitation found for this project', 404));
+  }
+
+  // Update the status to accepted
+  await projectMember.update({ status: 'accepted' });
+
+  // Create notification for project creator
+  await Notification.create({
+    userId: project.creatorId,
+    title: 'Leader Invitation Accepted',
+    message: `${req.user.name} has accepted the leader invitation for project: ${project.title}`,
+    type: 'project_update',
+    relatedId: project.id,
+    relatedType: 'professional_project',
+    link: `/projects/professional/${project.id}`
+  });
+
+  res.status(200).json({
+    success: true,
+    data: projectMember
+  });
+});
+
+// @desc    Reject project leader invitation
+// @route   POST /api/professional-projects/:id/reject-leader
+// @access  Private
+exports.rejectLeaderInvitation = asyncHandler(async (req, res, next) => {
+  const project = await ProfessionalProject.findByPk(req.params.id);
+  if (!project) {
+    return next(new ErrorResponse(`Project not found with id of ${req.params.id}`, 404));
+  }
+
+  // Find the project member record
+  const projectMember = await ProjectMember.findOne({
+    where: {
+      projectId: project.id,
+      userId: req.user.id,
+      role: 'leader',
+      status: 'invited'
+    }
+  });
+
+  if (!projectMember) {
+    return next(new ErrorResponse('No pending leader invitation found for this project', 404));
+  }
+
+  // Update the status to declined
+  await projectMember.update({ status: 'declined' });
+
+  // Create notification for project creator
+  await Notification.create({
+    userId: project.creatorId,
+    title: 'Leader Invitation Rejected',
+    message: `${req.user.name} has rejected the leader invitation for project: ${project.title}`,
+    type: 'project_update',
+    relatedId: project.id,
+    relatedType: 'professional_project',
+    link: `/projects/professional/${project.id}`
+  });
+
+  res.status(200).json({
+    success: true,
+    data: projectMember
+  });
 });

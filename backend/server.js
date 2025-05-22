@@ -131,11 +131,11 @@ const startServer = async () => {
     await sequelize.authenticate();
     console.log('Database connection established successfully');
     
-    // Sync database (in development)
-    if (process.env.NODE_ENV === 'development') {
-      await sequelize.sync({ alter: true });
-      console.log('Database synced');
-    }
+    // Comment out sync for now
+    // if (process.env.NODE_ENV === 'development') {
+    //   await sequelize.sync({ alter: true });
+    //   console.log('Database synced');
+    // }
     
     app.listen(PORT, () => {
       console.log(`Server running on port ${PORT}`);

@@ -1,4 +1,4 @@
-const { ProfessionalTask, ProfessionalProject, User, Comment, Attachment, Notification, sequelize } = require('../models');
+const { ProfessionalTask, ProfessionalProject, User, Department, ProjectMember, Comment, Attachment, Notification, sequelize } = require('../models');
 const asyncHandler = require('../middleware/asyncHandler');
 const ErrorResponse = require('../utils/errorResponse');
 const { Op } = require('sequelize');
@@ -221,14 +221,27 @@ exports.createProfessionalTask = asyncHandler(async (req, res, next) => {
   req.body.assignedById = req.user.id;
 
   // Check if project exists
-  const project = await ProfessionalProject.findByPk(req.body.projectId);
+  const project = await ProfessionalProject.findByPk(req.body.projectId, {
+    include: [{
+      model: ProjectMember,
+      as: 'ProjectMembers',
+      where: { userId: req.user.id },
+      required: false
+    }]
+  });
+  
   if (!project) {
     return next(new ErrorResponse(`Project not found with id of ${req.body.projectId}`, 404));
   }
 
-  // Only project manager (creator) can create tasks
-  if (project.creatorId !== req.user.id && req.user.role !== 'admin') {
-    return next(new ErrorResponse('Only the project manager can create tasks for this project', 403));
+  // Check if user is project creator or team leader
+  const isProjectCreator = project.creatorId === req.user.id;
+  const isTeamLeader = project.ProjectMembers && project.ProjectMembers.some(member => 
+    member.role === 'leader' && member.status === 'accepted'
+  );
+
+  if (!isProjectCreator && !isTeamLeader && req.user.role !== 'admin') {
+    return next(new ErrorResponse('Only the project manager or team leaders can create tasks for this project', 403));
   }
 
   // Assignment by email

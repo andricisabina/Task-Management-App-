@@ -12,7 +12,9 @@ const {
   getProjectComments,
   addProjectComment,
   editProjectComment,
-  deleteProjectComment
+  deleteProjectComment,
+  acceptLeaderInvitation,
+  rejectLeaderInvitation
 } = require('../controllers/professionalProjectController');
 const { protect } = require('../middleware/authMiddleware');
 
@@ -42,5 +44,8 @@ router.route('/:id/comments')
 router.route('/:id/comments/:commentId')
   .put(editProjectComment)
   .delete(deleteProjectComment);
+
+router.post('/:id/accept-leader', acceptLeaderInvitation);
+router.post('/:id/reject-leader', rejectLeaderInvitation);
 
 module.exports = router;

@@ -2,6 +2,7 @@ const { Notification } = require('../models');
 const asyncHandler = require('../middleware/asyncHandler');
 const ErrorResponse = require('../utils/errorResponse');
 const { Op } = require('sequelize');
+const { ProfessionalProject, Department } = require('../models');
 
 // @desc    Get all notifications for a user
 // @route   GET /api/notifications
@@ -160,5 +161,27 @@ exports.clearReadNotifications = asyncHandler(async (req, res, next) => {
   res.status(200).json({
     success: true,
     message: 'All read notifications deleted'
+  });
+});
+
+// @desc    Get professional project
+// @route   GET /api/professional-projects/:id
+// @access  Private
+exports.getProfessionalProject = asyncHandler(async (req, res, next) => {
+  const project = await ProfessionalProject.findByPk(req.params.id, {
+    include: [{ model: Department, as: 'departments' }]
+  });
+  
+  if (!project) {
+    return next(new ErrorResponse(`Project not found with id of ${req.params.id}`, 404));
+  }
+  
+  console.log("!!! PROFESSIONAL PROJECT DETAILS COMPONENT MOUNTED !!!");
+  
+  console.log("ProfessionalProjectDetails rendered");
+  
+  res.status(200).json({
+    success: true,
+    data: project
   });
 });

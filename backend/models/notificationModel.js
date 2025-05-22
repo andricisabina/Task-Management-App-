@@ -20,7 +20,7 @@ const Notification = sequelize.define('Notification', {
     allowNull: false
   },
   type: {
-    type: DataTypes.ENUM('task_assigned', 'task_updated', 'deadline_approaching', 'task_completed', 'comment_added', 'extension_requested', 'extension_response', 'project_update', 'system'),
+    type: DataTypes.ENUM('task_assigned', 'task_updated', 'deadline_approaching', 'task_completed', 'comment_added', 'extension_requested', 'extension_response', 'project_update', 'system', 'leader_invitation'),
     allowNull: false
   },
   isRead: {

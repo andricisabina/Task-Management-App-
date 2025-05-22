@@ -36,7 +36,7 @@ Department.hasMany(User, { foreignKey: 'departmentId' });
 PersonalProject.hasMany(PersonalTask, { foreignKey: 'projectId' });
 PersonalTask.belongsTo(PersonalProject, { foreignKey: 'projectId' });
 
-ProfessionalProject.hasMany(ProfessionalTask, { foreignKey: 'projectId' });
+ProfessionalProject.hasMany(ProfessionalTask, { foreignKey: 'projectId', as: 'ProfessionalTasks' });
 ProfessionalTask.belongsTo(ProfessionalProject, { foreignKey: 'projectId' });
 
 ProfessionalProject.hasMany(Comment, { foreignKey: 'projectId' });
@@ -129,6 +129,10 @@ ProfessionalProject.belongsToMany(Department, {
   foreignKey: 'projectId',
   otherKey: 'departmentId'
 });
+
+// Add the missing association for Attachment to User as 'uploader' and the reverse association as 'uploadedFiles'
+Attachment.belongsTo(User, { as: 'uploader', foreignKey: 'uploadedBy' });
+User.hasMany(Attachment, { as: 'uploadedFiles', foreignKey: 'uploadedBy' });
 
 // Export models and sequelize instance
 module.exports = {

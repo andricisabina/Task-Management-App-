@@ -24,7 +24,6 @@ export const AuthProvider = ({ children }) => {
         setCurrentUser(response.data)
       }
     } catch (error) {
-      console.error("Auth check failed:", error)
       localStorage.removeItem("token")
     } finally {
       setLoading(false)
@@ -40,7 +39,6 @@ export const AuthProvider = ({ children }) => {
       setCurrentUser(user)
       return { success: true }
     } catch (error) {
-      console.error("Login failed:", error)
       toast.error(error.message)
       return { success: false, error: error.message }
     }
@@ -55,7 +53,6 @@ export const AuthProvider = ({ children }) => {
       setCurrentUser(user)
       return { success: true }
     } catch (error) {
-      console.error("Registration failed:", error)
       toast.error(error.message)
       return { success: false, error: error.message }
     }
