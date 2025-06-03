@@ -127,7 +127,15 @@ const ProfessionalProjects = () => {
       {filteredProjects.length > 0 ? (
         <div className="projects-grid">
           {filteredProjects.map((project) => (
-            <div key={project.id} className="project-card card">
+            <div
+              key={project.id}
+              className="project-card card"
+              style={{
+                opacity: project.completionRate === 100 ? 0.5 : 1,
+                transition: 'opacity 0.3s',
+                cursor: project.completionRate === 100 ? 'pointer' : 'default',
+              }}
+            >
               <div className="project-card-header">
                 <div className="project-icon professional">
                   <Briefcase size={20} />

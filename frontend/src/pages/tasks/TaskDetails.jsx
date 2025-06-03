@@ -52,19 +52,24 @@ const TaskDetails = () => {
     fetchTaskDetails()
   }, [type, taskId])
 
-  const handleStatusChange = (e) => {
-    const newStatus = e.target.value
-    setTask({ ...task, status: newStatus })
-    toast.success(
-      `Task status updated to ${
-        newStatus === 'todo' ? 'To Do' :
-        newStatus === 'in-progress' ? 'In Progress' :
-        newStatus === 'completed' ? 'Completed' :
-        newStatus === 'on-hold' ? 'On Hold' :
-        newStatus === 'cancelled' ? 'Cancelled' :
-        newStatus.replace(/\b\w/g, l => l.toUpperCase())
-      }`
-    )
+  const handleStatusChange = async (e) => {
+    const newStatus = e.target.value;
+    try {
+      const response = await tasksApi.updatePersonalTask(task.id, { ...task, status: newStatus });
+      setTask(response.data);
+      toast.success(
+        `Task status updated to ${
+          newStatus === 'todo' ? 'To Do' :
+          newStatus === 'in-progress' ? 'In Progress' :
+          newStatus === 'completed' ? 'Completed' :
+          newStatus === 'on-hold' ? 'On Hold' :
+          newStatus === 'cancelled' ? 'Cancelled' :
+          newStatus.replace(/\b\w/g, l => l.toUpperCase())
+        }`
+      );
+    } catch (err) {
+      toast.error('Failed to update status: ' + (err.message || err));
+    }
   }
 
   const handleEditTask = () => {
@@ -241,14 +246,6 @@ const TaskDetails = () => {
       </div>
 
       <div className="task-info-card card" style={{ position: 'relative' }}>
-        <span className={`task-status-bar status-${task.status}`}>{
-          task.status === 'todo' ? 'To Do' :
-          task.status === 'in-progress' ? 'In Progress' :
-          task.status === 'completed' ? 'Completed' :
-          task.status === 'on-hold' ? 'On Hold' :
-          task.status === 'cancelled' ? 'Cancelled' :
-          task.status.replace(/\b\w/g, l => l.toUpperCase())
-        }</span>
         <div className="task-info-header">
           <h1 className="task-title">{task.title}</h1>
           <div className="task-status-selector">

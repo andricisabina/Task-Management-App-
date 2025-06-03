@@ -17,7 +17,7 @@ const TaskModal = ({ task, isProfessional = false, teamMembers = [], departments
     assignedTo: "",
     assignedToEmail: "",
     departmentId: departments.length > 0 ? departments[0].id : "",
-    status: "pending"
+    status: isProfessional ? "pending" : "todo"
   })
 
   useEffect(() => {
@@ -39,7 +39,7 @@ const TaskModal = ({ task, isProfessional = false, teamMembers = [], departments
         assignedTo: task.assignedTo || "",
         assignedToEmail: task.assignedToEmail || "",
         departmentId: task.departmentId || (departments.length > 0 ? departments[0].id : ""),
-        status: task.status || "pending"
+        status: task.status || (isProfessional ? "pending" : "todo")
       })
     } else {
       // Set default due date to tomorrow
@@ -50,7 +50,7 @@ const TaskModal = ({ task, isProfessional = false, teamMembers = [], departments
         dueDate: tomorrow.toISOString().split("T")[0],
         dueTime: "09:00",
         departmentId: departments.length > 0 ? departments[0].id : "",
-        status: "pending"
+        status: isProfessional ? "pending" : "todo"
       })
     }
   }, [task])
@@ -75,6 +75,12 @@ const TaskModal = ({ task, isProfessional = false, teamMembers = [], departments
       dueDate: dueDateTime,
     }
     delete submitData.dueTime
+
+    // Only include departmentId for professional tasks
+    if (!isProfessional) {
+      delete submitData.departmentId
+    }
+
     // For professional tasks, use assignedToEmail
     if (isProfessional) {
       submitData.assignedToEmail = formData.assignedToEmail || ''

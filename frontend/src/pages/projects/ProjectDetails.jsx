@@ -73,6 +73,17 @@ const ProjectDetails = () => {
     // eslint-disable-next-line
   }, [project])
 
+  useEffect(() => {
+    if (project && project.type === "professional" && (project.completionRate === 100 || (projectStats && projectStats.completionRate === 100))) {
+      // Only notify once per session per project
+      if (!window.__notifiedCompletedProjects) window.__notifiedCompletedProjects = {};
+      if (!window.__notifiedCompletedProjects[project.id]) {
+        toast.info("🎉 Project is 100% complete!", { autoClose: 5000 });
+        window.__notifiedCompletedProjects[project.id] = true;
+      }
+    }
+  }, [project, projectStats]);
+
   const fetchProjectDetails = async () => {
     try {
       setIsLoading(true)

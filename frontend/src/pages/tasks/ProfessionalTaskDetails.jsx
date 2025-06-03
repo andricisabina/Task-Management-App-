@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { tasksApi } from "../../services/api";
 import { toast } from "react-toastify";
+import "./TaskDetails.css";
 
 const ProfessionalTaskDetails = () => {
   const { id } = useParams();

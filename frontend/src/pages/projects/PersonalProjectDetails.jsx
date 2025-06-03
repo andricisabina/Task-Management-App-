@@ -246,20 +246,29 @@ const PersonalProjectDetails = () => {
         </div>
 
         {projectStats && (
-          <div className="project-progress">
-            <div className="progress-stats">
-              <span className="progress-text">Progress</span>
-              <span className="tasks-count">
-                {projectStats.completedTasks}/{projectStats.totalTasks} tasks completed
-              </span>
-            </div>
-            <div className="progress-bar">
-              <div 
-                className="progress-fill" 
-                style={{ width: `${projectStats.completionRate}%` }}
-              ></div>
-            </div>
-          </div>
+          (() => {
+            // Calculate completed and total tasks from taskCounts
+            const taskCounts = projectStats.taskCounts || [];
+            const completedTasks = parseInt(taskCounts.find(t => t.status === "completed")?.count || 0);
+            const totalTasks = taskCounts.reduce((sum, t) => sum + parseInt(t.count), 0);
+            const completionRate = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
+            return (
+              <div className="project-progress">
+                <div className="progress-stats">
+                  <span className="progress-text">Progress</span>
+                  <span className="tasks-count">
+                    {completedTasks}/{totalTasks} tasks completed
+                  </span>
+                </div>
+                <div className="progress-bar">
+                  <div 
+                    className="progress-fill" 
+                    style={{ width: `${completionRate}%` }}
+                  ></div>
+                </div>
+              </div>
+            );
+          })()
         )}
       </div>
 
@@ -344,12 +353,35 @@ const PersonalProjectDetails = () => {
         {filteredTasks.length > 0 ? (
           <div className="tasks-list">
             {filteredTasks.map((task) => (
-              <div key={task.id} className={`task-card card priority-${task.priority}`} style={{ display: 'flex', flexDirection: 'column', padding: 24, marginBottom: 16, borderRadius: 12, boxShadow: '0 2px 8px rgba(0,0,0,0.04)', background: '#fff', position: 'relative', overflow: 'visible' }}>
+              <div
+                key={task.id}
+                className={`task-card card priority-${task.priority}`}
+                style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  padding: 24,
+                  marginBottom: 16,
+                  borderRadius: 12,
+                  boxShadow: '0 2px 8px rgba(0,0,0,0.04)',
+                  background: '#fff',
+                  position: 'relative',
+                  overflow: 'visible',
+                  borderLeft: `4px solid ${getPriorityBorderColor(task.priority)}`,
+                  opacity: task.status === 'completed' ? 0.5 : 1,
+                  filter: task.status === 'completed' ? 'grayscale(0.3)' : 'none',
+                  transition: 'opacity 0.3s, filter 0.3s',
+                }}
+              >
                 <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 8 }}>
-                  <span style={{ fontSize: '1.5rem', fontWeight: 700, color: '#222', flex: 1 }}>{task.title}</span>
+                  <span
+                    className={`task-title${task.status === "completed" ? " completed" : ""}`}
+                    style={{ fontSize: '1.5rem', fontWeight: 700, flex: 1, color: getPriorityBorderColor(task.priority) }}
+                  >
+                    {task.title}
+                  </span>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 8 }}>
-                  <span className="priority-badge" style={{ fontWeight: 500, textTransform: 'capitalize', background: getPriorityColor(task.priority), color: getPriorityTextColor(task.priority), padding: '2px 12px', borderRadius: 8 }}>{task.priority}</span>
+                  <span className="priority-badge" style={{ fontWeight: 500, textTransform: 'capitalize', background: getPriorityBorderColor(task.priority), color: task.priority === 'medium' ? '#222' : '#fff', padding: '2px 12px', borderRadius: 8 }}>{task.priority}</span>
                   <span style={{ color: '#888', fontSize: '0.95rem' }}>
                     Due: {task.dueDate ? new Date(task.dueDate).toLocaleString() : 'N/A'}
                   </span>
@@ -365,7 +397,11 @@ const PersonalProjectDetails = () => {
                     Delete
                   </button>
                 </div>
-                <div style={{ position: 'absolute', top: 0, right: 0, zIndex: 9999 }}>
+                <div
+                  style={{ position: 'absolute', top: 0, right: 0, zIndex: 9999 }}
+                  onMouseEnter={() => setHoveredStatusDropdown(task.id)}
+                  onMouseLeave={() => { setHoveredStatusDropdown(null); setOpenStatusDropdown(null); }}
+                >
                   <span
                     className={`task-status-bar status-${task.status.replace('in-progress', 'inprogress').replace('completed', 'done')}`}
                     style={{ fontSize: '1.05rem', padding: '6px 20px', borderRadius: 10, fontWeight: 600, minWidth: 120, maxWidth: 200, textAlign: 'center', boxShadow: '0 8px 24px rgba(0,0,0,0.18)', display: 'inline-block', width: 'auto', cursor: 'pointer', background: '#fff', whiteSpace: 'nowrap' }}
@@ -472,28 +508,32 @@ function getStatusTextColor(status) {
 }
 
 function getPriorityColor(priority) {
-  switch (priority.toLowerCase()) {
-    case "low":
-      return "#f6ffed"
-    case "medium":
-      return "#fff7e6"
-    case "high":
-      return "#fff1f0"
-    default:
-      return "#f6ffed"
+  switch (priority) {
+    case 'urgent': return '#f5222d'; // red
+    case 'high': return '#fa8c16'; // orange
+    case 'medium': return '#ffdd00'; // yellow
+    case 'low': return '#1890ff'; // blue
+    default: return '#f0f0f0';
   }
 }
 
 function getPriorityTextColor(priority) {
-  switch (priority.toLowerCase()) {
-    case "low":
-      return "#52c41a"
-    case "medium":
-      return "#fa8c16"
-    case "high":
-      return "#f5222d"
-    default:
-      return "#52c41a"
+  switch (priority) {
+    case 'urgent': return '#fff'; // white text on red
+    case 'high': return '#fff'; // white text on orange
+    case 'medium': return '#222'; // dark text on yellow
+    case 'low': return '#fff'; // white text on blue
+    default: return '#222';
+  }
+}
+
+function getPriorityBorderColor(priority) {
+  switch (priority) {
+    case 'urgent': return '#e5383b'; // red
+    case 'high': return '#ff9f1c'; // orange
+    case 'medium': return '#ffdd00'; // yellow
+    case 'low': return '#8ecae6'; // blue
+    default: return '#e0e0e0';
   }
 }
 

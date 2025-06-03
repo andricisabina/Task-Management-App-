@@ -130,6 +130,8 @@ exports.getPersonalTask = asyncHandler(async (req, res, next) => {
 exports.createPersonalTask = asyncHandler(async (req, res, next) => {
   // Add user ID to body
   req.body.userId = req.user.id;
+  // Ignore departmentId if present
+  if ('departmentId' in req.body) delete req.body.departmentId;
   
   // Check if project exists if projectId is provided
   if (req.body.projectId) {

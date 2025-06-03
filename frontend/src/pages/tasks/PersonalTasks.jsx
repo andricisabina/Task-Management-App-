@@ -33,21 +33,31 @@ function getStatusTextColor(status) {
 
 function getPriorityColor(priority) {
   switch (priority) {
-    case 'urgent': return '#ff7875';
-    case 'high': return '#ffd666';
-    case 'medium': return '#91d5ff';
-    case 'low': return '#d9f7be';
+    case 'urgent': return '#f5222d'; // red
+    case 'high': return '#fa8c16'; // orange
+    case 'medium': return '#ffdd00'; // yellow
+    case 'low': return '#1890ff'; // blue
     default: return '#f0f0f0';
   }
 }
 
 function getPriorityTextColor(priority) {
   switch (priority) {
-    case 'urgent': return '#a8071a';
-    case 'high': return '#ad6800';
-    case 'medium': return '#0050b3';
-    case 'low': return '#237804';
+    case 'urgent': return '#fff'; // white text on red
+    case 'high': return '#fff'; // white text on orange
+    case 'medium': return '#222'; // dark text on yellow
+    case 'low': return '#fff'; // white text on blue
     default: return '#222';
+  }
+}
+
+function getPriorityBorderColor(priority) {
+  switch (priority) {
+    case 'urgent': return '#e5383b'; // red
+    case 'high': return '#ff9f1c'; // orange
+    case 'medium': return '#ffdd00'; // yellow
+    case 'low': return '#8ecae6'; // blue
+    default: return '#e0e0e0';
   }
 }
 
@@ -315,12 +325,35 @@ const PersonalTasks = () => {
       {sortedTasks.length > 0 ? (
         <div className="tasks-list">
           {sortedTasks.map((task) => (
-            <div key={task.id} className={`task-card card priority-${task.priority}`} style={{ display: 'flex', flexDirection: 'column', padding: 24, marginBottom: 16, borderRadius: 12, boxShadow: '0 2px 8px rgba(0,0,0,0.04)', background: '#fff', position: 'relative', overflow: 'visible' }}>
+            <div
+              key={task.id}
+              className={`task-card card priority-${task.priority}`}
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                padding: 24,
+                marginBottom: 16,
+                borderRadius: 12,
+                boxShadow: '0 2px 8px rgba(0,0,0,0.04)',
+                background: '#fff',
+                position: 'relative',
+                overflow: 'visible',
+                borderLeft: `4px solid ${getPriorityBorderColor(task.priority)}`,
+                opacity: task.status === 'completed' ? 0.5 : 1,
+                filter: task.status === 'completed' ? 'grayscale(0.3)' : 'none',
+                transition: 'opacity 0.3s, filter 0.3s',
+              }}
+            >
               <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 8 }}>
-                <span style={{ fontSize: '1.5rem', fontWeight: 700, color: '#222', flex: 1 }}>{task.title}</span>
+                <span
+                  className={`task-title${task.status === "completed" ? " completed" : ""}`}
+                  style={{ fontSize: '1.5rem', fontWeight: 700, flex: 1, color: getPriorityBorderColor(task.priority) }}
+                >
+                  {task.title}
+                </span>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 8 }}>
-                <span className="priority-badge" style={{ fontWeight: 500, textTransform: 'capitalize', background: getPriorityColor(task.priority), color: getPriorityTextColor(task.priority), padding: '2px 12px', borderRadius: 8 }}>{task.priority}</span>
+                <span className="priority-badge" style={{ fontWeight: 500, textTransform: 'capitalize', background: getPriorityBorderColor(task.priority), color: task.priority === 'medium' ? '#222' : '#fff', padding: '2px 12px', borderRadius: 8 }}>{task.priority}</span>
                 <span style={{ color: '#888', fontSize: '0.95rem' }}>
                   Due: {task.dueDate ? new Date(task.dueDate).toLocaleString() : 'N/A'}
                 </span>

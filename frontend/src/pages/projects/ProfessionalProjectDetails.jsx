@@ -485,10 +485,10 @@ const ProfessionalProjectDetails = () => {
                       <div key={task.id} className="task-card card" style={{ 
                         cursor: 'pointer', 
                         marginBottom: 16,
-                        borderLeft: `4px solid ${dept.color || '#007bff'}`
+                        borderLeft: `4px solid ${getPriorityBorderColor(task.priority)}`
                       }} onClick={() => navigate(`/tasks/professional/${task.id}`)}>
                         <div className="task-header">
-                          <h4 className="task-title">{task.title}</h4>
+                          <h4 className={`task-title${task.status === "completed" ? " completed" : ""}`} style={{ color: getPriorityBorderColor(task.priority) }}>{task.title}</h4>
                           <div className="task-actions">
                             {canUpdateStatus && (
                               <button
@@ -519,10 +519,7 @@ const ProfessionalProjectDetails = () => {
                         </div>
                         <p className="task-description">{task.description}</p>
                         <div className="task-meta">
-                          <span className="priority-badge" style={{
-                            backgroundColor: getPriorityColor(task.priority),
-                            color: getPriorityTextColor(task.priority)
-                          }}>
+                          <span className="priority-badge" style={{ backgroundColor: getPriorityBorderColor(task.priority), color: task.priority.toLowerCase() === 'medium' ? '#222' : '#fff' }}>
                             {task.priority}
                           </span>
                           {task.dueDate && (
@@ -565,10 +562,10 @@ const ProfessionalProjectDetails = () => {
                 <div key={task.id} className="task-card card" style={{ 
                   cursor: 'pointer', 
                   marginBottom: 16,
-                  borderLeft: `4px solid ${task.departmentId ? project.departments.find(d => d.id === task.departmentId).color || '#007bff' : '#f0f0f0'}`
+                  borderLeft: `4px solid ${getPriorityBorderColor(task.priority)}`
                 }} onClick={() => navigate(`/tasks/professional/${task.id}`)}>
                   <div className="task-header">
-                    <h4 className="task-title">{task.title}</h4>
+                    <h4 className={`task-title${task.status === "completed" ? " completed" : ""}`} style={{ color: getPriorityBorderColor(task.priority) }}>{task.title}</h4>
                     <div className="task-actions">
                       {canUpdateStatus && (
                         <button
@@ -599,10 +596,7 @@ const ProfessionalProjectDetails = () => {
                   </div>
                   <p className="task-description">{task.description}</p>
                   <div className="task-meta">
-                    <span className="priority-badge" style={{
-                      backgroundColor: getPriorityColor(task.priority),
-                      color: getPriorityTextColor(task.priority)
-                    }}>
+                    <span className="priority-badge" style={{ backgroundColor: getPriorityBorderColor(task.priority), color: task.priority.toLowerCase() === 'medium' ? '#222' : '#fff' }}>
                       {task.priority}
                     </span>
                     {task.dueDate && (
@@ -902,27 +896,31 @@ function getStatusTextColor(status) {
 
 function getPriorityColor(priority) {
   switch (priority.toLowerCase()) {
-    case "low":
-      return "#f6ffed"
-    case "medium":
-      return "#fff7e6"
-    case "high":
-      return "#fff1f0"
-    default:
-      return "#f6ffed"
+    case 'urgent': return '#f5222d'; // red
+    case 'high': return '#fa8c16'; // orange
+    case 'medium': return '#ffdd00'; // yellow
+    case 'low': return '#1890ff'; // blue
+    default: return '#f0f0f0';
   }
 }
 
 function getPriorityTextColor(priority) {
   switch (priority.toLowerCase()) {
-    case "low":
-      return "#52c41a"
-    case "medium":
-      return "#fa8c16"
-    case "high":
-      return "#f5222d"
-    default:
-      return "#52c41a"
+    case 'urgent': return '#fff'; // white text on red
+    case 'high': return '#fff'; // white text on orange
+    case 'medium': return '#222'; // dark text on yellow
+    case 'low': return '#fff'; // white text on blue
+    default: return '#222';
+  }
+}
+
+function getPriorityBorderColor(priority) {
+  switch (priority.toLowerCase()) {
+    case 'urgent': return '#e5383b'; // red
+    case 'high': return '#ff9f1c'; // orange
+    case 'medium': return '#ffdd00'; // yellow
+    case 'low': return '#8ecae6'; // blue
+    default: return '#e0e0e0';
   }
 }
 
