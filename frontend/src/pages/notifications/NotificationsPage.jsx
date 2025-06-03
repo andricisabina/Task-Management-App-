@@ -12,14 +12,24 @@ const NotificationsPage = () => {
   const [rejectTaskId, setRejectTaskId] = useState(null);
   const [rejectReason, setRejectReason] = useState("");
   const [rejectLoading, setRejectLoading] = useState(false);
+  const [pendingActions, setPendingActions] = useState({}); // { [taskId]: 'accepted' | 'rejected' }
 
   const handleAcceptTask = async (taskId) => {
+    // Optimistically update UI
+    setPendingActions((prev) => ({ ...prev, [taskId]: 'accepted' }));
     try {
       await tasksApi.acceptProfessionalTask(taskId);
       await fetchNotifications();
       toast.success("Task accepted successfully");
     } catch (error) {
+      // Revert UI if error
+      setPendingActions((prev) => {
+        const copy = { ...prev };
+        delete copy[taskId];
+        return copy;
+      });
       toast.error(error.message || "Failed to accept task");
+      await fetchNotifications();
     }
   };
 
@@ -28,16 +38,25 @@ const NotificationsPage = () => {
       toast.error("Please provide a reason for rejection");
       return;
     }
+    // Optimistically update UI
+    setPendingActions((prev) => ({ ...prev, [taskId]: 'rejected' }));
     try {
       setRejectLoading(true);
-      await tasksApi.rejectProfessionalTask(taskId, rejectReason);
+      await tasksApi.rejectProfessionalTask(taskId, { rejectionReason: rejectReason });
       setShowRejectModal(false);
       setRejectTaskId(null);
       setRejectReason("");
       await fetchNotifications();
       toast.success("Task rejected successfully");
     } catch (error) {
+      // Revert UI if error
+      setPendingActions((prev) => {
+        const copy = { ...prev };
+        delete copy[taskId];
+        return copy;
+      });
       toast.error(error.message || "Failed to reject task");
+      await fetchNotifications();
     } finally {
       setRejectLoading(false);
     }
@@ -95,42 +114,50 @@ const NotificationsPage = () => {
             <div style={{ marginTop: 12, display: 'flex', gap: 8 }}>
               {n.type === 'task_assigned' && n.relatedId && (
                 <>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleAcceptTask(n.relatedId);
-                    }}
-                    style={{
-                      background: "#4caf50",
-                      color: "#fff",
-                      border: "none",
-                      borderRadius: 6,
-                      padding: "8px 20px",
-                      fontWeight: 600,
-                      fontSize: 15,
-                      cursor: "pointer"
-                    }}
-                  >
-                    Accept Task
-                  </button>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      openRejectModal(n.relatedId);
-                    }}
-                    style={{
-                      background: "#f44336",
-                      color: "#fff",
-                      border: "none",
-                      borderRadius: 6,
-                      padding: "8px 20px",
-                      fontWeight: 600,
-                      fontSize: 15,
-                      cursor: "pointer"
-                    }}
-                  >
-                    Reject Task
-                  </button>
+                  {pendingActions[n.relatedId] === 'accepted' || n.taskStatus === 'accepted' || n.taskStatus === 'in-progress' ? (
+                    <span style={{ color: '#4caf50', fontWeight: 600 }}>Task Accepted</span>
+                  ) : pendingActions[n.relatedId] === 'rejected' || n.taskStatus === 'rejected' ? (
+                    <span style={{ color: '#f44336', fontWeight: 600 }}>Task Rejected</span>
+                  ) : (
+                    <>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleAcceptTask(n.relatedId);
+                        }}
+                        style={{
+                          background: "#4caf50",
+                          color: "#fff",
+                          border: "none",
+                          borderRadius: 6,
+                          padding: "8px 20px",
+                          fontWeight: 600,
+                          fontSize: 15,
+                          cursor: "pointer"
+                        }}
+                      >
+                        Accept Task
+                      </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          openRejectModal(n.relatedId);
+                        }}
+                        style={{
+                          background: "#f44336",
+                          color: "#fff",
+                          border: "none",
+                          borderRadius: 6,
+                          padding: "8px 20px",
+                          fontWeight: 600,
+                          fontSize: 15,
+                          cursor: "pointer"
+                        }}
+                      >
+                        Reject Task
+                      </button>
+                    </>
+                  )}
                 </>
               )}
 

@@ -70,6 +70,8 @@ export const tasksApi = {
   createProfessionalTask: (data) => api.post('/professional-tasks', data),
   updateProfessionalTask: (id, data) => api.put(`/professional-tasks/${id}`, data),
   deleteProfessionalTask: (id) => api.delete(`/professional-tasks/${id}`),
+  acceptProfessionalTask: (id) => api.post(`/professional-tasks/${id}/accept`),
+  rejectProfessionalTask: (id, data) => api.post(`/professional-tasks/${id}/reject`, data),
 };
 
 // Dashboard API
