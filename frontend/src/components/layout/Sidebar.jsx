@@ -4,12 +4,14 @@ import { useState } from "react"
 import { NavLink, useNavigate } from "react-router-dom"
 import { User, Home, CheckSquare, Folder, Briefcase, BarChart2, Menu, X, Bell, Calendar } from "react-feather"
 import { useAuth } from "../../context/AuthContext"
+import { useNotifications } from "../../context/NotificationContext"
 import Logo from "../common/Logo"
 import "./Sidebar.css"
 
 const Sidebar = () => {
   const [isOpen, setIsOpen] = useState(true)
   const { currentUser, logout } = useAuth()
+  const { unreadCount } = useNotifications()
   const navigate = useNavigate()
 
   const handleLogout = () => {
@@ -62,6 +64,21 @@ const Sidebar = () => {
           <NavLink to="/notifications" className="nav-item">
             <Bell className="nav-icon" />
             <span>Notifications</span>
+            {unreadCount > 0 && (
+              <span style={{
+                background: '#ff5252',
+                color: '#fff',
+                borderRadius: '50%',
+                padding: '2px 8px',
+                fontSize: 13,
+                fontWeight: 700,
+                marginLeft: 8,
+                minWidth: 22,
+                display: 'inline-block',
+                textAlign: 'center',
+                lineHeight: '18px',
+              }}>{unreadCount}</span>
+            )}
           </NavLink>
 
           <NavLink to="/reports/productivity" className="nav-item">

@@ -194,6 +194,43 @@ exports.updatePersonalTask = asyncHandler(async (req, res, next) => {
   // Update task
   task = await task.update(req.body);
   
+  // If task is part of a project and is now completed, check if all tasks are completed
+  if (task.projectId && req.body.status === 'completed') {
+    const incompleteTasks = await PersonalTask.count({
+      where: {
+        projectId: task.projectId,
+        status: { [Op.notIn]: ['completed', 'cancelled'] }
+      }
+    });
+    console.log(`[DEBUG] Incomplete tasks for project ${task.projectId}:`, incompleteTasks);
+    if (incompleteTasks === 0) {
+      // All tasks are completed, mark project as completed
+      const project = await PersonalProject.findByPk(task.projectId);
+      console.log(`[DEBUG] Project status before update:`, project.status);
+      if (project && project.status !== 'completed') {
+        await project.update({ status: 'completed' });
+        console.log(`[DEBUG] Project status updated to completed for project ${project.id}`);
+        // Send notification for project completion
+        const { Notification } = require('../models');
+        try {
+          console.log(`[DEBUG] Attempting to create notification for completed project:`, project.id, project.title);
+          await Notification.create({
+            userId: project.userId,
+            title: 'Project Completed',
+            message: `Your personal project "${project.title}" has been marked as completed.`,
+            type: 'project_update',
+            relatedId: project.id,
+            relatedType: 'personal_project',
+            link: `/projects/personal/${project.id}`
+          });
+          console.log(`[DEBUG] Notification created successfully for project ${project.id}`);
+        } catch (err) {
+          console.error('[ERROR] Failed to create notification (from task completion):', err);
+        }
+      }
+    }
+  }
+  
   res.status(200).json({
     success: true,
     data: task

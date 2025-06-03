@@ -21,6 +21,7 @@ import TaskModal from "../../components/tasks/TaskModal"
 import { projectsApi, tasksApi } from "../../services/api"
 import "./ProjectDetails.css"
 import { useAuth } from "../../context/AuthContext"
+import { useNotifications } from "../../context/NotificationContext"
 
 const PersonalProjectDetails = () => {
   const { projectId } = useParams()
@@ -42,6 +43,7 @@ const PersonalProjectDetails = () => {
   const [filterPriority, setFilterPriority] = useState("all")
   const [isFilterOpen, setIsFilterOpen] = useState(false)
   const { currentUser } = useAuth()
+  const { fetchNotifications } = useNotifications()
   const statusOptions = [
     { value: 'todo', label: 'To Do' },
     { value: 'in-progress', label: 'In Progress' },
@@ -49,6 +51,14 @@ const PersonalProjectDetails = () => {
     { value: 'on-hold', label: 'On Hold' },
     { value: 'cancelled', label: 'Cancelled' },
   ];
+
+  const statusOrder = {
+    'todo': 1,
+    'in-progress': 2,
+    'on-hold': 3,
+    'cancelled': 4,
+    'completed': 5
+  };
 
   useEffect(() => {
     fetchProjectDetails()
@@ -142,18 +152,25 @@ const PersonalProjectDetails = () => {
   }
 
   const handleStatusUpdate = async (taskId, newStatus) => {
+    console.log('handleStatusUpdate called', { taskId, newStatus });
     try {
       const taskToUpdate = tasks.find((task) => task.id === taskId)
-      if (!taskToUpdate) return
-      
+      if (!taskToUpdate) {
+        console.log('Task not found');
+        return
+      }
+      console.log('Updating task:', taskToUpdate)
       const response = await tasksApi.updatePersonalTask(taskId, { 
         ...taskToUpdate, 
         status: newStatus 
       })
+      console.log('API response:', response)
       setTasks(tasks.map((task) => (task.id === taskId ? response.data : task)))
       toast.success("Task status updated")
       await fetchProjectStats()
+      await fetchNotifications()
     } catch (err) {
+      console.error('Error updating status:', err)
       toast.error(err.message)
     }
   }
@@ -214,11 +231,16 @@ const PersonalProjectDetails = () => {
     return matchesSearch && matchesStatus && matchesPriority
   })
 
+  const sortedTasks = filteredTasks.slice().sort((a, b) => {
+    return (statusOrder[a.status] || 99) - (statusOrder[b.status] || 99);
+  });
+
   return (
     <div className="project-details-container">
       <div className="project-details-header">
-        <Link to="/personal-projects" className="back-link">
-          <ArrowLeft size={18} /> Back to Projects
+        <Link to="/projects/personal" className="back-link">
+          <ArrowLeft size={20} />
+          Back to Projects
         </Link>
         <div className="project-actions">
           <button className="btn btn-primary create-task-btn" onClick={handleCreateTask}>
@@ -293,32 +315,6 @@ const PersonalProjectDetails = () => {
               Filters
             </button>
           </div>
-          <div className="tasks-tabs">
-            <button
-              className={`tab-btn ${activeTab === "all" ? "active" : ""}`}
-              onClick={() => setActiveTab("all")}
-            >
-              All
-            </button>
-            <button
-              className={`tab-btn ${activeTab === "todo" ? "active" : ""}`}
-              onClick={() => setActiveTab("todo")}
-            >
-              To Do
-            </button>
-            <button
-              className={`tab-btn ${activeTab === "in_progress" ? "active" : ""}`}
-              onClick={() => setActiveTab("in_progress")}
-            >
-              In Progress
-            </button>
-            <button
-              className={`tab-btn ${activeTab === "completed" ? "active" : ""}`}
-              onClick={() => setActiveTab("completed")}
-            >
-              Completed
-            </button>
-          </div>
         </div>
 
         {isFilterOpen && (
@@ -350,9 +346,9 @@ const PersonalProjectDetails = () => {
           </div>
         )}
 
-        {filteredTasks.length > 0 ? (
+        {sortedTasks.length > 0 ? (
           <div className="tasks-list">
-            {filteredTasks.map((task) => (
+            {sortedTasks.map((task) => (
               <div
                 key={task.id}
                 className={`task-card card priority-${task.priority}`}
@@ -399,17 +395,33 @@ const PersonalProjectDetails = () => {
                 </div>
                 <div
                   style={{ position: 'absolute', top: 0, right: 0, zIndex: 9999 }}
-                  onMouseEnter={() => setHoveredStatusDropdown(task.id)}
-                  onMouseLeave={() => { setHoveredStatusDropdown(null); setOpenStatusDropdown(null); }}
                 >
                   <span
                     className={`task-status-bar status-${task.status.replace('in-progress', 'inprogress').replace('completed', 'done')}`}
-                    style={{ fontSize: '1.05rem', padding: '6px 20px', borderRadius: 10, fontWeight: 600, minWidth: 120, maxWidth: 200, textAlign: 'center', boxShadow: '0 8px 24px rgba(0,0,0,0.18)', display: 'inline-block', width: 'auto', cursor: 'pointer', background: '#fff', whiteSpace: 'nowrap' }}
+                    style={{
+                      fontSize: '1.05rem',
+                      padding: '8px 24px',
+                      borderRadius: 12,
+                      fontWeight: 600,
+                      minWidth: 120,
+                      maxWidth: 200,
+                      textAlign: 'center',
+                      boxShadow: '0 8px 24px rgba(0,0,0,0.18)',
+                      display: 'inline-block',
+                      width: 'auto',
+                      cursor: 'pointer',
+                      background: openStatusDropdown === task.id ? '#f0f4ff' : '#fff',
+                      whiteSpace: 'nowrap',
+                      border: '1px solid #e0e0e0',
+                      transition: 'background 0.15s, box-shadow 0.15s',
+                    }}
                     onClick={e => {
                       const rect = e.target.getBoundingClientRect()
                       setOpenStatusDropdown(openStatusDropdown === task.id ? null : task.id)
                       setPopoverAnchor(openStatusDropdown === task.id ? null : rect)
                     }}
+                    onMouseEnter={e => e.target.style.background = '#f5f7fa'}
+                    onMouseLeave={e => e.target.style.background = openStatusDropdown === task.id ? '#f0f4ff' : '#fff'}
                   >
                     {task.status === 'todo' ? 'To Do' : task.status === 'in-progress' ? 'In Progress' : task.status === 'completed' ? 'Completed' : task.status === 'on-hold' ? 'On Hold' : task.status === 'cancelled' ? 'Cancelled' : task.status.replace(/\b\w/g, l => l.toUpperCase())}
                   </span>
@@ -538,15 +550,21 @@ function getPriorityBorderColor(priority) {
 }
 
 function StatusPopover({ anchorRect, options, currentStatus, onSelect, onClose, getStatusTextColor, getStatusColor }) {
+  console.log('StatusPopover rendered');
   const popoverRef = useRef(null)
+  const ignoreNextClick = useRef(true)
   useEffect(() => {
     function handleClickOutside(event) {
+      if (ignoreNextClick.current) {
+        ignoreNextClick.current = false;
+        return;
+      }
       if (popoverRef.current && !popoverRef.current.contains(event.target)) {
         onClose()
       }
     }
-    document.addEventListener("mousedown", handleClickOutside)
-    return () => document.removeEventListener("mousedown", handleClickOutside)
+    document.addEventListener("click", handleClickOutside)
+    return () => document.removeEventListener("click", handleClickOutside)
   }, [onClose])
   if (!anchorRect) return null
   return ReactDOM.createPortal(
@@ -560,18 +578,19 @@ function StatusPopover({ anchorRect, options, currentStatus, onSelect, onClose, 
         border: '1px solid #eee',
         borderRadius: 10,
         boxShadow: '0 8px 24px rgba(0,0,0,0.18)',
-        zIndex: 99999,
+        zIndex: 999999,
         minWidth: 140,
         maxWidth: 180,
         maxHeight: 320,
         overflowY: 'visible',
         transition: 'opacity 0.15s',
+        pointerEvents: 'auto',
       }}
     >
       {options.map(option => (
         <div
           key={option.value}
-          onClick={() => { onSelect(option.value); onClose(); }}
+          tabIndex={0}
           style={{
             padding: '8px 12px',
             cursor: 'pointer',
@@ -580,6 +599,12 @@ function StatusPopover({ anchorRect, options, currentStatus, onSelect, onClose, 
             fontWeight: currentStatus === option.value ? 700 : 500,
             fontSize: '1.01rem',
             whiteSpace: 'nowrap',
+            pointerEvents: 'auto',
+          }}
+          onMouseDown={async () => {
+            console.log('StatusPopover option clicked', option.value);
+            await onSelect(option.value);
+            onClose();
           }}
         >
           {option.label}

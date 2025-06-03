@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import api from '../services/api';
+import { toast } from "react-toastify";
 
 const NotificationContext = createContext();
 
@@ -14,12 +15,29 @@ export const useNotifications = () => {
 export const NotificationProvider = ({ children }) => {
   const [notifications, setNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [lastNotificationId, setLastNotificationId] = useState(null);
 
   const fetchNotifications = async () => {
     try {
       const response = await api.get('/notifications');
       setNotifications(response.data);
       setUnreadCount(response.data.filter(n => !n.isRead).length);
+
+      // Show toast for new notification
+      if (response.data.length > 0 && response.data[0].id !== lastNotificationId) {
+        if (lastNotificationId !== null) {
+          // Only show toast if this isn't the first load
+          const n = response.data[0];
+          toast.info(
+            <div>
+              <b>{n.title}</b>
+              <div>{n.message}</div>
+            </div>,
+            { autoClose: 5000 }
+          );
+        }
+        setLastNotificationId(response.data[0].id);
+      }
     } catch (error) {
       console.error('Error fetching notifications:', error);
     }

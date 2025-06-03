@@ -6,7 +6,7 @@ import UserProfile from "./pages/profile/Userprofile"
 import PersonalProjects from "./pages/projects/PersonalProjects"
 import ProfessionalProjects from "./pages/projects/ProfessionalProjects"
 import PersonalTasks from "./pages/tasks/PersonalTasks"
-import ProjectDetails from "./pages/projects/ProjectDetails"
+import ProjectDetailsSwitch from "./pages/projects/ProjectDetailsSwitch"
 import TaskDetails from "./pages/tasks/TaskDetails"
 import CalendarPage from "./pages/CalendarPage"
 import NotificationsPage from "./pages/notifications/NotificationsPage"
@@ -41,7 +41,7 @@ function App() {
               <Route path="/personal-projects" element={<PersonalProjects />} />
               <Route path="/professional-projects" element={<ProfessionalProjects />} />
               <Route path="/tasks" element={<PersonalTasks />} />
-              <Route path="/projects/:type/:projectId" element={<ProjectDetails />} />
+              <Route path="/projects/:type/:projectId" element={<ProjectDetailsSwitch />} />
               <Route path="/tasks/:type/:taskId" element={<TaskDetails />} />
               <Route path="/calendar" element={<CalendarPage />} />
               <Route path="/notifications" element={<NotificationsPage />} />

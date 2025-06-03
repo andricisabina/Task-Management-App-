@@ -1,4 +1,4 @@
-const { PersonalProject, PersonalTask, sequelize } = require('../models');
+const { PersonalProject, PersonalTask, sequelize, Notification } = require('../models');
 const asyncHandler = require('../middleware/asyncHandler');
 const ErrorResponse = require('../utils/errorResponse');
 const { Op } = require('sequelize');
@@ -75,8 +75,32 @@ exports.updatePersonalProject = asyncHandler(async (req, res, next) => {
     return next(new ErrorResponse(`User not authorized to update this project`, 401));
   }
   
+  // Store previous status
+  const prevStatus = project.status;
   // Update project
   project = await project.update(req.body);
+
+  // Debug log for all updates
+  console.log('Updating project:', req.body, 'Previous status:', prevStatus);
+
+  // Send notification if project is completed
+  if (req.body.status === 'completed' && prevStatus !== 'completed') {
+    try {
+      console.log('Attempting to create notification for completed project:', project.id, project.title);
+      await Notification.create({
+        userId: project.userId,
+        title: 'Project Completed',
+        message: `Your personal project "${project.title}" has been marked as completed.`,
+        type: 'project_update',
+        relatedId: project.id,
+        relatedType: 'personal_project',
+        link: `/projects/personal/${project.id}`
+      });
+      console.log('Notification created successfully');
+    } catch (err) {
+      console.error('Failed to create notification:', err);
+    }
+  }
   
   res.status(200).json({
     success: true,

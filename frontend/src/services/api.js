@@ -39,6 +39,7 @@ export const projectsApi = {
   createPersonalProject: (data) => api.post('/personal-projects', data),
   updatePersonalProject: (id, data) => api.put(`/personal-projects/${id}`, data),
   deletePersonalProject: (id) => api.delete(`/personal-projects/${id}`),
+  getPersonalProjectStats: (id) => api.get(`/personal-projects/${id}/stats`),
 
   // Professional Projects
   getProfessionalProjects: () => api.get('/professional-projects'),

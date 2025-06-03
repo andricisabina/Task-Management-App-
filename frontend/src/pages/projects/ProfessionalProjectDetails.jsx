@@ -28,6 +28,7 @@ import "./ProjectDetails.css"
 import ReactDOM from "react-dom"
 import { useAuth } from "../../context/AuthContext"
 import ConfirmModal from "../../components/ConfirmModal"
+import { useNotifications } from "../../context/NotificationContext"
 
 const ProfessionalProjectDetails = () => {
   const { projectId } = useParams()
@@ -56,6 +57,7 @@ const ProfessionalProjectDetails = () => {
   const { currentUser } = useAuth()
   const [deleteConfirm, setDeleteConfirm] = useState({ open: false, comment: null })
   const [modalDepartments, setModalDepartments] = useState([])
+  const { fetchNotifications } = useNotifications()
 
   useEffect(() => {
     fetchProjectDetails()
@@ -173,6 +175,7 @@ const ProfessionalProjectDetails = () => {
       setTasks(tasks.map((task) => (task.id === taskId ? response.data : task)))
       toast.success("Task status updated")
       await fetchProjectDetails()
+      await fetchNotifications()
     } catch (err) {
       toast.error(err.message)
     }
@@ -222,21 +225,15 @@ const ProfessionalProjectDetails = () => {
 
   const handleEditComment = (comment) => {
     setEditingCommentId(comment.id)
-    setEditingContent({ [comment.id]: comment.content })
+    setEditingContent(comment.content)
   }
 
   const handleSaveEdit = async (comment) => {
     try {
-      const response = await projectsApi.editProjectComment(
-        projectId,
-        comment.id,
-        { content: editingContent[comment.id] }
-      )
-      setComments(
-        comments.map((c) =>
-          c.id === comment.id ? { ...c, content: response.data.content, isEdited: true } : c
-        )
-      )
+      const response = await projectsApi.editProjectComment(projectId, comment.id, {
+        content: editingContent,
+      })
+      setComments(comments.map((c) => (c.id === comment.id ? response.data : c)))
       setEditingCommentId(null)
       toast.success("Comment updated successfully")
     } catch (err) {
@@ -667,13 +664,8 @@ const ProfessionalProjectDetails = () => {
                 {editingCommentId === comment.id ? (
                   <div className="edit-comment-form">
                     <textarea
-                      value={editingContent[comment.id]}
-                      onChange={(e) =>
-                        setEditingContent({
-                          ...editingContent,
-                          [comment.id]: e.target.value,
-                        })
-                      }
+                      value={editingContent}
+                      onChange={(e) => setEditingContent(e.target.value)}
                     />
                     <div className="edit-actions">
                       <button
@@ -778,13 +770,8 @@ const ProfessionalProjectDetails = () => {
                         {editingCommentId === reply.id ? (
                           <div className="edit-reply-form">
                             <textarea
-                              value={editingContent[reply.id]}
-                              onChange={(e) =>
-                                setEditingContent({
-                                  ...editingContent,
-                                  [reply.id]: e.target.value,
-                                })
-                              }
+                              value={editingContent}
+                              onChange={(e) => setEditingContent(e.target.value)}
                             />
                             <div className="edit-actions">
                               <button
