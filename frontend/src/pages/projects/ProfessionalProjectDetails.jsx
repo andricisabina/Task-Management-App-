@@ -88,7 +88,6 @@ const ProfessionalProjectDetails = () => {
       }
 
       setProject(project)
-      alert("Departments: " + JSON.stringify(project.departments));
     } catch (err) {
       setError(err.message)
       toast.error(err.message)
@@ -817,13 +816,13 @@ const ProfessionalProjectDetails = () => {
         </form>
       </div>
 
-      {isModalOpen && modalDepartments.length > 0 && (
+      {isModalOpen && (
         <TaskModal
           task={currentTask}
-          isProfessional={true}
-          departments={modalDepartments}
           onClose={() => setIsModalOpen(false)}
           onSave={handleSaveTask}
+          departments={modalDepartments}
+          type="professional"
         />
       )}
 

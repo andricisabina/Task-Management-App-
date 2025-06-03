@@ -4,7 +4,8 @@ import { useState, useEffect } from "react"
 import { X } from "react-feather"
 import "./TaskModal.css"
 
-const TaskModal = ({ task, isProfessional = false, teamMembers = [], departments = [], onClose, onSave }) => {
+const TaskModal = ({ task, type = 'personal', teamMembers = [], departments = [], onClose, onSave }) => {
+  const isProfessional = type === 'professional';
   console.log("TaskModal departments:", departments);
   console.log("isProfessional:", isProfessional, "departments.length:", departments.length);
 
@@ -53,7 +54,7 @@ const TaskModal = ({ task, isProfessional = false, teamMembers = [], departments
         status: isProfessional ? "pending" : "todo"
       })
     }
-  }, [task])
+  }, [task, departments])
 
   const handleChange = (e) => {
     const { name, value } = e.target
@@ -189,31 +190,29 @@ const TaskModal = ({ task, isProfessional = false, teamMembers = [], departments
                 required
               />
             </div>
-            {isProfessional && departments.length > 0 && (
-              <>
-                <div style={{color: 'red'}}>DEBUG: Department dropdown should be here</div>
-                <div className="form-group">
-                  <label htmlFor="departmentId" className="form-label">
-                    Department
-                  </label>
-                  <select
-                    id="departmentId"
-                    name="departmentId"
-                    className="form-input"
-                    value={formData.departmentId}
-                    onChange={handleChange}
-                    required
-                  >
-                    {departments.map(dept => (
-                      <option key={dept.id} value={dept.id}>{dept.name}</option>
-                    ))}
-                  </select>
-                </div>
-              </>
-            )}
           </div>
 
-          {isProfessional && (
+          {type === 'professional' && departments.length > 0 && (
+            <div className="form-group">
+              <label htmlFor="departmentId" className="form-label">
+                Department
+              </label>
+              <select
+                id="departmentId"
+                name="departmentId"
+                className="form-input"
+                value={formData.departmentId}
+                onChange={handleChange}
+                required
+              >
+                {departments.map(dept => (
+                  <option key={dept.id} value={dept.id}>{dept.name}</option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {type === 'professional' && (
             <div className="form-group">
               <label htmlFor="assignedToEmail" className="form-label">
                 Assign To (Email)
@@ -226,6 +225,7 @@ const TaskModal = ({ task, isProfessional = false, teamMembers = [], departments
                 value={formData.assignedToEmail || ''}
                 onChange={handleChange}
                 placeholder="Enter user email"
+                required
               />
             </div>
           )}
@@ -234,11 +234,11 @@ const TaskModal = ({ task, isProfessional = false, teamMembers = [], departments
             <button type="button" className="btn btn-secondary" onClick={onClose}>
               Cancel
             </button>
-            <button type="submit" className="btn btn-primary" disabled={isProfessional && departments.length === 0}>
+            <button type="submit" className="btn btn-primary" disabled={type === 'professional' && departments.length === 0}>
               {task ? "Update Task" : "Create Task"}
             </button>
           </div>
-          {isProfessional && departments.length === 0 && (
+          {type === 'professional' && departments.length === 0 && (
             <div style={{ color: 'red', marginTop: 8 }}>
               No departments available. Please add departments to the project first.
             </div>

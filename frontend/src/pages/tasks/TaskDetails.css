@@ -1,41 +1,308 @@
 .task-details-container {
-    padding: 20px;
-    max-width: 800px;
+    max-width: 1200px;
     margin: 0 auto;
+    padding: 24px;
   }
   
   .task-details-header {
     display: flex;
-    justify-content: space-between;
     align-items: center;
+    gap: 16px;
     margin-bottom: 24px;
   }
   
-  .back-link {
+  .back-button {
     display: flex;
     align-items: center;
     gap: 8px;
-    color: var(--text-dark);
-    font-weight: 500;
-    transition: var(--transition);
+    padding: 8px 16px;
+    border: none;
+    background: none;
+    color: #666;
+    cursor: pointer;
+    font-size: 16px;
   }
   
-  .back-link:hover {
-    color: var(--dark-blue);
+  .back-button:hover {
+    color: #333;
+  }
+  
+  .task-title {
+    margin: 0;
+    font-size: 24px;
+    color: #333;
+  }
+  
+  .task-details-content {
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    padding: 24px;
+  }
+  
+  .task-info-section {
+    margin-bottom: 32px;
+  }
+  
+  .task-info-section h2 {
+    margin: 0 0 16px 0;
+    font-size: 20px;
+    color: #333;
+  }
+  
+  .info-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 24px;
+  }
+  
+  .info-item {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  
+  .info-item label {
+    font-size: 14px;
+    color: #666;
+  }
+  
+  .info-item span {
+    font-size: 16px;
+    color: #333;
+  }
+  
+  .status-badge {
+    display: inline-block;
+    padding: 4px 12px;
+    border-radius: 16px;
+    font-size: 14px;
+    font-weight: 500;
+  }
+  
+  .status-badge.pending {
+    background-color: #fff3cd;
+    color: #856404;
+  }
+  
+  .status-badge.in-progress {
+    background-color: #cce5ff;
+    color: #004085;
+  }
+  
+  .status-badge.completed {
+    background-color: #d4edda;
+    color: #155724;
+  }
+  
+  .status-badge.rejected {
+    background-color: #f8d7da;
+    color: #721c24;
+  }
+  
+  .priority-badge {
+    display: inline-block;
+    padding: 4px 12px;
+    border-radius: 16px;
+    font-size: 14px;
+    font-weight: 500;
+  }
+  
+  .priority-badge.low {
+    background-color: #e2e3e5;
+    color: #383d41;
+  }
+  
+  .priority-badge.medium {
+    background-color: #fff3cd;
+    color: #856404;
+  }
+  
+  .priority-badge.high {
+    background-color: #f8d7da;
+    color: #721c24;
+  }
+  
+  .priority-badge.urgent {
+    background-color: #dc3545;
+    color: white;
+  }
+  
+  .task-description-section {
+    margin-bottom: 32px;
+  }
+  
+  .task-description-section h2 {
+    margin: 0 0 16px 0;
+    font-size: 20px;
+    color: #333;
+  }
+  
+  .task-description-section p {
+    margin: 0;
+    line-height: 1.6;
+    color: #666;
   }
   
   .task-actions {
     display: flex;
-    gap: 12px;
+    gap: 16px;
+    margin-top: 24px;
+  }
+  
+  .rejection-reason {
+    margin-top: 24px;
+    padding: 16px;
+    background-color: #f8f9fa;
+    border-radius: 8px;
+  }
+  
+  .rejection-reason h3 {
+    margin: 0 0 8px 0;
+    font-size: 18px;
+    color: #333;
+  }
+  
+  .rejection-reason p {
+    margin: 0;
+    color: #666;
+  }
+  
+  .modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+  }
+  
+  .modal-container {
+    background: white;
+    border-radius: 8px;
+    width: 100%;
+    max-width: 500px;
+    max-height: 90vh;
+    overflow-y: auto;
+  }
+  
+  .modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 24px;
+    border-bottom: 1px solid #eee;
+  }
+  
+  .modal-header h3 {
+    margin: 0;
+    font-size: 20px;
+    color: #333;
+  }
+  
+  .close-btn {
+    background: none;
+    border: none;
+    color: #666;
+    cursor: pointer;
+    padding: 4px;
+  }
+  
+  .close-btn:hover {
+    color: #333;
+  }
+  
+  .modal-form {
+    padding: 24px;
+  }
+  
+  .form-group {
+    margin-bottom: 16px;
+  }
+  
+  .form-group label {
+    display: block;
+    margin-bottom: 8px;
+    font-size: 14px;
+    color: #666;
+  }
+  
+  .form-input {
+    width: 100%;
+    padding: 8px 12px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 16px;
+  }
+  
+  .form-input:focus {
+    outline: none;
+    border-color: #007bff;
+  }
+  
+  .modal-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 16px;
+    margin-top: 24px;
+  }
+  
+  .btn {
+    padding: 8px 16px;
+    border: none;
+    border-radius: 4px;
+    font-size: 16px;
+    cursor: pointer;
+    transition: background-color 0.2s;
+  }
+  
+  .btn-secondary {
+    background-color: #6c757d;
+    color: white;
+  }
+  
+  .btn-secondary:hover {
+    background-color: #5a6268;
+  }
+  
+  .btn-success {
+    background-color: #28a745;
+    color: white;
+  }
+  
+  .btn-success:hover {
+    background-color: #218838;
   }
   
   .btn-danger {
-    background-color: #f44336;
+    background-color: #dc3545;
     color: white;
   }
   
   .btn-danger:hover {
-    background-color: #d32f2f;
+    background-color: #c82333;
+  }
+  
+  .loading {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 200px;
+    font-size: 18px;
+    color: #666;
+  }
+  
+  .error {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 200px;
+    font-size: 18px;
+    color: #dc3545;
   }
   
   .task-info-card {
@@ -47,12 +314,6 @@
     justify-content: space-between;
     align-items: flex-start;
     margin-bottom: 20px;
-  }
-  
-  .task-title {
-    font-size: 1.5rem;
-    font-weight: 700;
-    margin-right: 16px;
   }
   
   .task-title.completed {
@@ -98,28 +359,6 @@
     gap: 8px;
     color: var(--text-light);
     font-size: 0.875rem;
-  }
-  
-  .priority-badge {
-    font-size: 0.75rem;
-    padding: 4px 10px;
-    border-radius: 12px;
-    background-color: #f0f0f0;
-  }
-  
-  .priority-high {
-    background-color: #ffcdd2;
-    color: #c62828;
-  }
-  
-  .priority-medium {
-    background-color: #ffe0b2;
-    color: #ef6c00;
-  }
-  
-  .priority-low {
-    background-color: #dcedc8;
-    color: #558b2f;
   }
   
   .task-project-link {

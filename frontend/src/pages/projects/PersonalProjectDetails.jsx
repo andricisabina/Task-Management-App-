@@ -460,7 +460,7 @@ const PersonalProjectDetails = () => {
           task={currentTask}
           onClose={() => setIsModalOpen(false)}
           onSave={handleSaveTask}
-          isPersonal={true}
+          type="personal"
         />
       )}
 
