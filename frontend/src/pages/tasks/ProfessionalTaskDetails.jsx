@@ -73,6 +73,9 @@ const ProfessionalTaskDetails = () => {
 
   const canAcceptReject = currentUser && task.assignedToId === currentUser.id && task.status === 'pending';
 
+  // Add a flag for showing the status dropdown only after acceptance
+  const canChangeStatus = currentUser && task.assignedToId === currentUser.id && (task.status === 'in-progress' || task.status === 'review' || task.status === 'completed' || task.status === 'deadline-extension-requested');
+
   return (
     <div className="task-details-container">
       <div className="task-details-header">
@@ -126,6 +129,16 @@ const ProfessionalTaskDetails = () => {
             <button className="btn btn-danger" onClick={() => setShowRejectModal(true)}>
               Reject Task
             </button>
+          </div>
+        )}
+
+        {/* Show status dropdown only after acceptance */}
+        {canChangeStatus && (
+          <div className="task-status-dropdown">
+            {/* Render your status dropdown here, e.g. <StatusDropdown ... /> */}
+            {/* Example placeholder: */}
+            <span>Change status: </span>
+            {/* ...status dropdown component... */}
           </div>
         )}
 

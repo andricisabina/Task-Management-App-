@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useNotifications } from "../../context/NotificationContext";
 import api, { tasksApi, projectsApi } from "../../services/api";
 import { useAuth } from "../../context/AuthContext";
@@ -16,6 +16,8 @@ const NotificationsPage = () => {
   const [modalTask, setModalTask] = useState(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [modalLoading, setModalLoading] = useState(false);
+  const [taskStatuses, setTaskStatuses] = useState({}); // { [taskId]: status }
+  const fetchedTaskIds = useRef(new Set());
 
   const handleAcceptTask = async (taskId) => {
     // Optimistically update UI
@@ -106,6 +108,32 @@ const NotificationsPage = () => {
     }
   };
 
+  useEffect(() => {
+    // Fetch statuses for all professional task_assigned notifications
+    const fetchStatuses = async () => {
+      const promises = notifications
+        .filter((n) => n.type === 'task_assigned' && n.relatedType === 'professional_task' && n.relatedId && !fetchedTaskIds.current.has(n.relatedId))
+        .map(async (n) => {
+          try {
+            const response = await tasksApi.getProfessionalTask(n.relatedId);
+            fetchedTaskIds.current.add(n.relatedId);
+            return { taskId: n.relatedId, status: response.data.status };
+          } catch {
+            return { taskId: n.relatedId, status: null };
+          }
+        });
+      const results = await Promise.all(promises);
+      setTaskStatuses((prev) => {
+        const updated = { ...prev };
+        results.forEach(({ taskId, status }) => {
+          if (taskId) updated[taskId] = status;
+        });
+        return updated;
+      });
+    };
+    fetchStatuses();
+  }, [notifications]);
+
   return (
     <div style={{ padding: 32 }}>
       <h2>Notifications {unreadCount > 0 && <span style={{ color: "#ff5252" }}>({unreadCount} unread)</span>}</h2>
@@ -130,14 +158,15 @@ const NotificationsPage = () => {
             
             {/* Action buttons based on notification type */}
             <div style={{ marginTop: 12, display: 'flex', gap: 8 }}>
-              {n.type === 'task_assigned' && n.relatedId && (
-                <>
-                  {n.taskStatus === 'accepted' || n.taskStatus === 'in-progress' ? (
-                    <span style={{ color: '#4caf50', fontWeight: 600 }}>Task Accepted</span>
-                  ) : n.taskStatus === 'rejected' ? (
-                    <span style={{ color: '#f44336', fontWeight: 600 }}>Task Rejected</span>
-                  ) : n.taskStatus === 'pending' ? (
-                    <>
+              {n.type === 'task_assigned' && n.relatedId && n.relatedType === 'professional_task' && (
+                (() => {
+                  const status = taskStatuses[n.relatedId];
+                  if (status === 'in-progress' || status === 'accepted' || status === 'review' || status === 'completed' || status === 'deadline-extension-requested') {
+                    return <span style={{ color: '#4caf50', fontWeight: 600 }}>Task Accepted</span>;
+                  } else if (status === 'rejected') {
+                    return <span style={{ color: '#f44336', fontWeight: 600 }}>Task Rejected</span>;
+                  } else if (status === 'pending') {
+                    return <>
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
@@ -174,9 +203,11 @@ const NotificationsPage = () => {
                       >
                         Reject Task
                       </button>
-                    </>
-                  ) : null}
-                </>
+                    </>;
+                  } else {
+                    return null;
+                  }
+                })()
               )}
 
               {n.type === 'leader_invitation' && n.relatedId && (

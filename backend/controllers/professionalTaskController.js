@@ -336,20 +336,6 @@ exports.updateProfessionalTask = asyncHandler(async (req, res, next) => {
     // Set completedAt if task is being marked as completed
     if (req.body.status === 'completed' && task.status !== 'completed') {
       req.body.completedAt = new Date();
-      // Create notification for task assigner
-      if (task.assignedById) {
-        await Notification.create({
-          userId: task.assignedById,
-          title: 'Task Completed',
-          message: `Task "${task.title}" has been marked as completed`,
-          type: 'task_completed',
-          relatedId: task.id,
-          relatedType: 'professional_task',
-          link: `/tasks/professional/${task.id}`
-        });
-      }
-    } else if (req.body.status !== 'completed' && task.status === 'completed') {
-      req.body.completedAt = null;
     }
     // Handle rejection reasons
     if (req.body.status === 'rejected' && !req.body.rejectionReason) {
@@ -361,18 +347,6 @@ exports.updateProfessionalTask = asyncHandler(async (req, res, next) => {
         return next(new ErrorResponse(`Extension days and reason are required for deadline extension requests`, 400));
       }
       req.body.extensionStatus = 'requested';
-      // Create notification for task assigner
-      if (task.assignedById) {
-        await Notification.create({
-          userId: task.assignedById,
-          title: 'Deadline Extension Requested',
-          message: `A deadline extension of ${req.body.extensionRequestDays} days has been requested for task "${task.title}"`,
-          type: 'extension_requested',
-          relatedId: task.id,
-          relatedType: 'professional_task',
-          link: `/tasks/professional/${task.id}`
-        });
-      }
     }
     // Handle extension responses
     if (req.body.extensionStatus && (req.body.extensionStatus === 'approved' || req.body.extensionStatus === 'rejected')) {
@@ -387,33 +361,9 @@ exports.updateProfessionalTask = asyncHandler(async (req, res, next) => {
         req.body.dueDate = currentDueDate;
         // Set status back to in-progress
         req.body.status = 'in-progress';
-        // Create notification for assignee
-        if (task.assignedToId) {
-          await Notification.create({
-            userId: task.assignedToId,
-            title: 'Deadline Extension Approved',
-            message: `Your deadline extension request for task "${task.title}" has been approved`,
-            type: 'extension_response',
-            relatedId: task.id,
-            relatedType: 'professional_task',
-            link: `/tasks/professional/${task.id}`
-          });
-        }
       } else if (req.body.extensionStatus === 'rejected') {
         // Set status back to in-progress
         req.body.status = 'in-progress';
-        // Create notification for assignee
-        if (task.assignedToId) {
-          await Notification.create({
-            userId: task.assignedToId,
-            title: 'Deadline Extension Rejected',
-            message: `Your deadline extension request for task "${task.title}" has been rejected`,
-            type: 'extension_response',
-            relatedId: task.id,
-            relatedType: 'professional_task',
-            link: `/tasks/professional/${task.id}`
-          });
-        }
       }
     }
   }
