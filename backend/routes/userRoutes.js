@@ -7,11 +7,17 @@ const {
   updateUser,
   deleteUser,
   uploadProfilePhoto,
-  getUsersByDepartment
+  getUsersByDepartment,
+  searchUserByEmail
 } = require('../controllers/userController');
 const { protect, authorize } = require('../middleware/authMiddleware');
 
+// All routes below require authentication
 router.use(protect);
+
+// User search and department search are available to all authenticated users
+router.get('/search', searchUserByEmail);
+router.get('/department/:departmentId', getUsersByDepartment);
 
 // Admin only routes
 router.route('/')
@@ -25,8 +31,5 @@ router.route('/:id')
 
 // Profile photo upload (for all users)
 router.put('/profile-upload', uploadProfilePhoto);
-
-// Get users by department
-router.get('/department/:departmentId', getUsersByDepartment);
 
 module.exports = router;

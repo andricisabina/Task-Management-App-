@@ -89,14 +89,38 @@ exports.getProfessionalProject = asyncHandler(async (req, res, next) => {
       },
       {
         model: ProfessionalTask,
-        as: 'ProfessionalTasks'
+        as: 'ProfessionalTasks',
+        include: [
+          {
+            model: User,
+            as: 'assignedTo',
+            attributes: ['id', 'name', 'email']
+          }
+        ]
       }
     ],
     order: [[{ model: ProfessionalTask, as: 'ProfessionalTasks' }, 'dueDate', 'ASC']]
   });
   
+  console.log('Fetched project:', project ? project.id : null);
+  console.log('Fetched project.departments:', project && project.departments ? project.departments : null);
+  
   if (!project) {
     return next(new ErrorResponse(`Project not found with id of ${id}`, 404));
+  }
+
+  // Enrich each department with leader info
+  if (project.departments && project.departments.length > 0) {
+    const { User } = require('../models');
+    for (const dept of project.departments) {
+      const leaderId = dept.ProfessionalProjectDepartment?.leaderId;
+      if (leaderId) {
+        const leader = await User.findByPk(leaderId, { attributes: ['id', 'name', 'email'] });
+        dept.setDataValue('leader', leader);
+      } else {
+        dept.setDataValue('leader', null);
+      }
+    }
   }
   
   res.status(200).json({
@@ -130,24 +154,41 @@ exports.createProfessionalProject = asyncHandler(async (req, res, next) => {
     // 3. For each department: add ProjectDepartment, invite leader
     for (const dept of departments) {
       // dept: { departmentId, leaderEmail }
+      if (!dept.leaderEmail) {
+        throw new ErrorResponse('Leader email is required for each department', 400);
+      }
       let leader = await User.findOne({ where: { email: dept.leaderEmail } });
       if (!leader) {
         // Optionally, create a new user with this email
-        leader = await User.create({ email: dept.leaderEmail, name: dept.leaderEmail.split('@')[0] }, { transaction });
+        const randomPassword = Math.random().toString(36).slice(-12);
+        leader = await User.create({ email: dept.leaderEmail, name: dept.leaderEmail.split('@')[0], password: randomPassword }, { transaction });
       }
 
       // Add to ProjectDepartment with leaderId
       await project.addDepartment(dept.departmentId, { through: { leaderId: leader.id }, transaction });
 
-      // Add leader as ProjectMember (role: 'leader', status: 'invited')
-      await ProjectMember.create({
-        userId: leader.id,
-        projectId: project.id,
-        departmentId: dept.departmentId,
-        role: 'leader',
-        status: 'invited',
-        invitedById: creatorId
-      }, { transaction });
+      // Use findOrCreate to robustly prevent duplicates and set correct role/status
+      const [member, created] = await ProjectMember.findOrCreate({
+        where: {
+          userId: leader.id,
+          projectId: project.id,
+          departmentId: dept.departmentId
+        },
+        defaults: {
+          role: 'leader',
+          status: 'invited',
+          invitedById: creatorId
+        },
+        transaction
+      });
+
+      if (!created && (member.role !== 'leader' || member.status !== 'invited')) {
+        await member.update({
+          role: 'leader',
+          status: 'invited',
+          invitedById: creatorId
+        }, { transaction });
+      }
 
       // Send invitation email (sample)
       try {
@@ -185,8 +226,14 @@ exports.createProfessionalProject = asyncHandler(async (req, res, next) => {
 exports.updateProfessionalProject = asyncHandler(async (req, res, next) => {
   const { id } = req.params;
   const userId = req.user.id;
-  const { title, description, startDate, dueDate, status, priority, color, members, departments } = req.body;
-  
+  const { title, description, startDate, dueDate, status, priority, color, members, departments, newDepartments } = req.body;
+
+  // Add logging for debugging
+  console.log('--- updateProfessionalProject payload ---');
+  console.log('req.body:', JSON.stringify(req.body, null, 2));
+  console.log('departments:', departments);
+  console.log('newDepartments:', newDepartments);
+
   const transaction = await sequelize.transaction();
   
   try {
@@ -203,6 +250,12 @@ exports.updateProfessionalProject = asyncHandler(async (req, res, next) => {
         {
           model: User,
           through: { attributes: [] }
+        },
+        {
+          model: Department,
+          as: 'departments',
+          through: { attributes: ['leaderId'] },
+          attributes: ['id']
         }
       ]
     });
@@ -228,9 +281,54 @@ exports.updateProfessionalProject = asyncHandler(async (req, res, next) => {
         await project.setUsers([userId, ...members], { transaction });
       }
 
-      // Update departments if specified
+      // Update departments if specified (existing departments only)
       if (departments && Array.isArray(departments)) {
         await project.setDepartments(departments, { transaction });
+      }
+
+      // Add new departments and leaders if provided
+      if (newDepartments && Array.isArray(newDepartments)) {
+        // Get current department IDs
+        const currentDeptIds = project.departments.map(d => d.id);
+        for (const dept of newDepartments) {
+          if (currentDeptIds.includes(dept.departmentId)) continue; // skip if already involved
+          // Validate leaderEmail
+          if (!dept.leaderEmail) {
+            throw new ErrorResponse('Leader email is required for new departments', 400);
+          }
+          // Find or create leader
+          let leader = await User.findOne({ where: { email: dept.leaderEmail } });
+          if (!leader) {
+            const randomPassword = Math.random().toString(36).slice(-12);
+            leader = await User.create({ email: dept.leaderEmail, name: dept.leaderEmail.split('@')[0], password: randomPassword }, { transaction });
+          }
+          // Add department to project with leaderId
+          await project.addDepartment(dept.departmentId, { through: { leaderId: leader.id }, transaction });
+          // Use findOrCreate to avoid duplicate ProjectMember
+          await ProjectMember.findOrCreate({
+            where: {
+              userId: leader.id,
+              projectId: project.id,
+              departmentId: dept.departmentId
+            },
+            defaults: {
+              role: 'leader',
+              status: 'invited',
+              invitedById: userId
+            },
+            transaction
+          });
+          // Send invitation email
+          try {
+            await sendEmail({
+              to: leader.email,
+              subject: `Invitation to lead department in project: ${project.title}`,
+              text: `Hello ${leader.name},\n\nYou have been invited to be the leader of the department in the project: ${project.title}.\nPlease log in to accept the invitation.\n\nThank you!`
+            });
+          } catch (emailErr) {
+            console.error('Failed to send leader invitation email:', emailErr);
+          }
+        }
       }
     } else {
       return next(new ErrorResponse(`User not authorized to update this project`, 401));
@@ -254,7 +352,7 @@ exports.updateProfessionalProject = asyncHandler(async (req, res, next) => {
         {
           model: Department,
           as: 'departments',
-          through: { attributes: [] },
+          through: { attributes: ['leaderId'] },
           attributes: ['id', 'name', 'color']
         }
       ]
@@ -266,6 +364,8 @@ exports.updateProfessionalProject = asyncHandler(async (req, res, next) => {
     });
   } catch (error) {
     await transaction.rollback();
+    // Add more specific error logging
+    console.error('updateProfessionalProject error:', error);
     next(error);
   }
 });
@@ -327,7 +427,7 @@ exports.deleteProfessionalProject = asyncHandler(async (req, res, next) => {
 // @route   POST /api/professional-projects/:id/members
 // @access  Private
 exports.addProjectMember = asyncHandler(async (req, res, next) => {
-  const { userId } = req.body;
+  const { userId, departmentId } = req.body;
   const { id: projectId } = req.params;
   
   if (!userId) {
@@ -339,31 +439,56 @@ exports.addProjectMember = asyncHandler(async (req, res, next) => {
   if (!project) {
     return next(new ErrorResponse(`Project not found with id of ${projectId}`, 404));
   }
-  
-  // Check if user is creator or admin
-  if (project.creatorId !== req.user.id && req.user.role !== 'admin') {
-    return next(new ErrorResponse(`User not authorized to update this project`, 401));
-  }
-  
+
   // Check if user exists
   const user = await User.findByPk(userId);
-  
   if (!user) {
     return next(new ErrorResponse(`User not found with id of ${userId}`, 404));
   }
-  
+
   // Check if member already exists
   const existingMember = await ProjectMember.findOne({
     where: { userId, projectId }
   });
-  
   if (existingMember) {
     return next(new ErrorResponse(`User is already a member of this project`, 400));
   }
-  
-  // Add member
-  await ProjectMember.create({ userId, projectId });
-  
+
+  // Authorization: manager/admin or department leader for this department
+  let isAuthorized = false;
+  if (project.creatorId === req.user.id || req.user.role === 'admin') {
+    isAuthorized = true;
+  } else if (departmentId) {
+    // Check if requester is leader for this department
+    const leader = await ProjectMember.findOne({
+      where: {
+        userId: req.user.id,
+        projectId,
+        departmentId,
+        role: 'leader',
+        status: 'accepted'
+      }
+    });
+    if (leader) isAuthorized = true;
+  }
+  if (!isAuthorized) {
+    return next(new ErrorResponse('Not authorized to add member to this department/project', 401));
+  }
+
+  // Add member (with departmentId if provided)
+  await ProjectMember.create({ userId, projectId, departmentId: departmentId || null });
+
+  // Send invitation email to the new member
+  try {
+    await sendEmail({
+      to: user.email,
+      subject: `You've been added to the project: ${project.title}`,
+      text: `Hello ${user.name || user.email},\n\nYou have been added as a member to the project: ${project.title}.\nPlease log in to view your tasks and participate.\n\nThank you!`
+    });
+  } catch (emailErr) {
+    console.error('Failed to send member invitation email:', emailErr);
+  }
+
   res.status(200).json({
     success: true,
     message: 'Member added successfully'
@@ -675,5 +800,25 @@ exports.rejectLeaderInvitation = asyncHandler(async (req, res, next) => {
   res.status(200).json({
     success: true,
     data: projectMember
+  });
+});
+
+// TEMP TEST ENDPOINT: Verify project-department association
+exports.testProjectDepartments = asyncHandler(async (req, res, next) => {
+  const { id } = req.params;
+  const project = await ProfessionalProject.findByPk(id, {
+    include: [
+      {
+        model: Department,
+        as: 'departments',
+        through: { attributes: ['leaderId'] },
+        attributes: ['id', 'name', 'color']
+      }
+    ]
+  });
+  console.log('TEST project.departments:', project && project.departments ? project.departments : null);
+  res.status(200).json({
+    success: true,
+    departments: project ? project.departments : null
   });
 });

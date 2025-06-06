@@ -7,6 +7,7 @@ const { sequelize } = require('./models');
 const errorHandler = require('./middleware/errorMiddleware');
 const multer = require('multer');
 const fs = require('fs');
+const cookieParser = require('cookie-parser');
 
 // Load environment variables
 dotenv.config();
@@ -15,10 +16,14 @@ dotenv.config();
 const app = express();
 
 // Middleware
-app.use(cors());
+app.use(cors({
+  origin: 'http://localhost:5173', // Update this if your frontend runs elsewhere
+  credentials: true
+}));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(morgan('dev'));
+app.use(cookieParser());
 
 // Static folder for uploads
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));

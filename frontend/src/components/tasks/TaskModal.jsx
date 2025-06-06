@@ -5,10 +5,6 @@ import { X } from "react-feather"
 import "./TaskModal.css"
 
 const TaskModal = ({ task, type = 'personal', teamMembers = [], departments = [], onClose, onSave }) => {
-  const isProfessional = type === 'professional';
-  console.log("TaskModal departments:", departments);
-  console.log("isProfessional:", isProfessional, "departments.length:", departments.length);
-
   const [formData, setFormData] = useState({
     title: "",
     description: "",
@@ -17,19 +13,19 @@ const TaskModal = ({ task, type = 'personal', teamMembers = [], departments = []
     dueTime: "",
     assignedTo: "",
     assignedToEmail: "",
-    departmentId: departments.length > 0 ? departments[0].id : "",
-    status: isProfessional ? "pending" : "todo"
+    departmentId: "",
+    status: "todo"
   })
 
   useEffect(() => {
+    const isProfessional = type === 'professional';
     if (task) {
-      // Split dueDate into date and time if possible
-      let dueDate = ""
-      let dueTime = ""
+      let dueDate = "";
+      let dueTime = "";
       if (task.dueDate) {
-        const dt = new Date(task.dueDate)
-        dueDate = dt.toISOString().slice(0, 10)
-        dueTime = dt.toTimeString().slice(0, 5)
+        const dt = new Date(task.dueDate);
+        dueDate = dt.toISOString().slice(0, 10);
+        dueTime = dt.toTimeString().slice(0, 5);
       }
       setFormData({
         title: task.title || "",
@@ -39,22 +35,26 @@ const TaskModal = ({ task, type = 'personal', teamMembers = [], departments = []
         dueTime,
         assignedTo: task.assignedTo || "",
         assignedToEmail: task.assignedToEmail || "",
-        departmentId: task.departmentId || (departments.length > 0 ? departments[0].id : ""),
+        departmentId: isProfessional ? (task.departmentId || (departments && departments.length > 0 ? departments[0].id : "")) : "",
         status: task.status || (isProfessional ? "pending" : "todo")
-      })
+      });
     } else {
-      // Set default due date to tomorrow
-      const tomorrow = new Date()
-      tomorrow.setDate(tomorrow.getDate() + 1)
+      const tomorrow = new Date();
+      tomorrow.setDate(tomorrow.getDate() + 1);
       setFormData({
-        ...formData,
+        title: "",
+        description: "",
+        priority: "medium",
         dueDate: tomorrow.toISOString().split("T")[0],
         dueTime: "09:00",
-        departmentId: departments.length > 0 ? departments[0].id : "",
+        assignedTo: "",
+        assignedToEmail: "",
+        departmentId: isProfessional && departments && departments.length > 0 ? departments[0].id : "",
         status: isProfessional ? "pending" : "todo"
-      })
+      });
     }
-  }, [task, departments])
+    // eslint-disable-next-line
+  }, [task, type, departments && departments.length > 0 ? departments[0].id : ""]);
 
   const handleChange = (e) => {
     const { name, value } = e.target
@@ -78,12 +78,12 @@ const TaskModal = ({ task, type = 'personal', teamMembers = [], departments = []
     delete submitData.dueTime
 
     // Only include departmentId for professional tasks
-    if (!isProfessional) {
+    if (!type === 'professional') {
       delete submitData.departmentId
     }
 
     // For professional tasks, use assignedToEmail
-    if (isProfessional) {
+    if (type === 'professional') {
       submitData.assignedToEmail = formData.assignedToEmail || ''
       delete submitData.assignedTo
     }
@@ -92,17 +92,18 @@ const TaskModal = ({ task, type = 'personal', teamMembers = [], departments = []
 
   return (
     <div className="modal-overlay">
-      <div className="modal-container">
+      <div className="modal-content">
         <div className="modal-header">
-          <h2>{task ? "Edit Task" : "Create New Task"}</h2>
+          <h2>{task ? "Edit Task" : "Create Task"}</h2>
           <button className="close-btn" onClick={onClose}>
             <X size={20} />
           </button>
         </div>
-        <form onSubmit={handleSubmit} className="modal-form">
+
+        <form onSubmit={handleSubmit}>
           <div className="form-group">
             <label htmlFor="title" className="form-label">
-              Task Title
+              Title
             </label>
             <input
               type="text"
@@ -114,6 +115,7 @@ const TaskModal = ({ task, type = 'personal', teamMembers = [], departments = []
               required
             />
           </div>
+
           <div className="form-group">
             <label htmlFor="description" className="form-label">
               Description
@@ -122,11 +124,10 @@ const TaskModal = ({ task, type = 'personal', teamMembers = [], departments = []
               id="description"
               name="description"
               className="form-input"
-              rows="4"
               value={formData.description}
               onChange={handleChange}
-              required
-            ></textarea>
+              rows="4"
+            />
           </div>
 
           <div className="form-row">
@@ -140,6 +141,7 @@ const TaskModal = ({ task, type = 'personal', teamMembers = [], departments = []
                 className="form-input"
                 value={formData.priority}
                 onChange={handleChange}
+                required
               >
                 <option value="low">Low</option>
                 <option value="medium">Medium</option>
@@ -147,26 +149,7 @@ const TaskModal = ({ task, type = 'personal', teamMembers = [], departments = []
                 <option value="urgent">Urgent</option>
               </select>
             </div>
-            {isProfessional && (
-              <div className="form-group">
-                <label htmlFor="status" className="form-label">
-                  Status
-                </label>
-                <select
-                  id="status"
-                  name="status"
-                  className="form-input"
-                  value={formData.status}
-                  onChange={handleChange}
-                >
-                  <option value="pending">Pending</option>
-                  <option value="in-progress">In Progress</option>
-                  <option value="review">Review</option>
-                  <option value="completed">Completed</option>
-                  <option value="rejected">Rejected</option>
-                </select>
-              </div>
-            )}
+
             <div className="form-group">
               <label htmlFor="dueDate" className="form-label">
                 Due Date

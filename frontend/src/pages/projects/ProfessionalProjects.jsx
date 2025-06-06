@@ -168,12 +168,27 @@ const ProfessionalProjects = () => {
                     </span>
                   </div>
                 </div>
-                <div className="project-team">
+                <div className="project-team meta-item">
                   <Users size={14} />
                   <span>
-                    {project.Users?.map(user => user.name).join(", ") || "No team members"}
+                    <strong>Manager:</strong> {project.creator?.name || project.creator?.email || "Unknown"}
                   </span>
                 </div>
+                {project.departments && project.departments.length > 0 && project.ProjectMembers && (
+                  project.departments.map(dept => {
+                    const leader = project.ProjectMembers?.find(
+                      m => m.departmentId === dept.id && m.role === 'leader'
+                    );
+                    return (
+                      <div className="meta-item" key={dept.id} style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 2 }}>
+                        <Users size={14} />
+                        <span>
+                          <strong>{dept.name} Leader:</strong> {leader?.member?.name || leader?.member?.email || 'Not assigned'}
+                        </span>
+                      </div>
+                    );
+                  })
+                )}
                 <div className="project-date">Created on {new Date(project.createdAt).toLocaleDateString()}</div>
               </Link>
             </div>

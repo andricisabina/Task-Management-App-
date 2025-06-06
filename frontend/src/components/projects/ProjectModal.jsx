@@ -14,6 +14,8 @@ const ProjectModal = ({ project, isProfessional = false, onClose, onSave }) => {
   const [departments, setDepartments] = useState([]);
   const [selectedDepartments, setSelectedDepartments] = useState([]);
   const [leaderEmails, setLeaderEmails] = useState({});
+  const [alreadyInvolved, setAlreadyInvolved] = useState([]);
+  const [alreadyLeaders, setAlreadyLeaders] = useState({});
 
   useEffect(() => {
     if (project) {
@@ -24,6 +26,27 @@ const ProjectModal = ({ project, isProfessional = false, onClose, onSave }) => {
       })
     }
   }, [project])
+
+  useEffect(() => {
+    if (project && project.departments) {
+      // Get the IDs of departments already involved in the project
+      const involvedDeptIds = project.departments.map(d => d.id);
+      setAlreadyInvolved(involvedDeptIds);
+      
+      // Set up leader emails for existing departments
+      const leaderEmailsMap = {};
+      project.departments.forEach(d => {
+        if (d.leader) {
+          leaderEmailsMap[d.id] = d.leader.email;
+        }
+      });
+      setAlreadyLeaders(leaderEmailsMap);
+      
+      // Set selected departments to include already involved ones
+      setSelectedDepartments(involvedDeptIds);
+      setLeaderEmails(leaderEmailsMap);
+    }
+  }, [project]);
 
   useEffect(() => {
     if (isProfessional) {
@@ -42,10 +65,11 @@ const ProjectModal = ({ project, isProfessional = false, onClose, onSave }) => {
   }
 
   const handleDepartmentChange = (deptId) => {
+    const id = typeof deptId === 'object' ? deptId.id : deptId;
     setSelectedDepartments((prev) =>
-      prev.includes(deptId)
-        ? prev.filter((id) => id !== deptId)
-        : [...prev, deptId]
+      prev.includes(id)
+        ? prev.filter((d) => d !== id)
+        : [...prev, id]
     );
   };
 
@@ -56,16 +80,39 @@ const ProjectModal = ({ project, isProfessional = false, onClose, onSave }) => {
   const handleSubmit = (e) => {
     e.preventDefault()
 
+    if (isProfessional) {
+      // Validate leader emails for all selected departments (that are not already involved)
+      const missingLeader = selectedDepartments.some(
+        deptId => !alreadyInvolved.includes(deptId) && (!leaderEmails[deptId] || leaderEmails[deptId].trim() === '')
+      );
+      if (missingLeader) {
+        alert('Please enter a leader email for every selected department.');
+        return;
+      }
+    }
+
     const projectData = {
       title: formData.title,
       description: formData.description,
     }
 
     if (isProfessional) {
-      projectData.departments = selectedDepartments.map((deptId) => ({
-        departmentId: deptId,
-        leaderEmail: leaderEmails[deptId] || '',
-      }));
+      if (project) {
+        // EDIT: send departments as array of IDs, newDepartments as array of objects
+        projectData.departments = selectedDepartments;
+        projectData.newDepartments = selectedDepartments
+          .filter(deptId => !alreadyInvolved.includes(deptId))
+          .map((deptId) => ({
+            departmentId: deptId,
+            leaderEmail: leaderEmails[deptId] || '',
+          }));
+      } else {
+        // CREATE: send departments as array of objects
+        projectData.departments = selectedDepartments.map(deptId => ({
+          departmentId: deptId,
+          leaderEmail: leaderEmails[deptId] || ''
+        }));
+      }
     }
 
     onSave(projectData)
@@ -73,18 +120,17 @@ const ProjectModal = ({ project, isProfessional = false, onClose, onSave }) => {
 
   return (
     <div className="modal-overlay">
-      <div className="modal-container">
+      <div className="modal-content">
         <div className="modal-header">
-          <h2>{project ? "Edit Project" : "Create New Project"}</h2>
+          <h2>{project ? "Edit Project" : "Create Project"}</h2>
           <button className="close-btn" onClick={onClose}>
             <X size={20} />
           </button>
         </div>
-        <form onSubmit={handleSubmit} className="modal-form">
+
+        <form onSubmit={handleSubmit}>
           <div className="form-group">
-            <label htmlFor="title" className="form-label">
-              Project Title
-            </label>
+            <label htmlFor="title">Title</label>
             <input
               type="text"
               id="title"
@@ -95,46 +141,50 @@ const ProjectModal = ({ project, isProfessional = false, onClose, onSave }) => {
               required
             />
           </div>
+
           <div className="form-group">
-            <label htmlFor="description" className="form-label">
-              Description
-            </label>
+            <label htmlFor="description">Description</label>
             <textarea
               id="description"
               name="description"
-              className="form-input"
-              rows="4"
               value={formData.description}
               onChange={handleChange}
-              required
-            ></textarea>
+              rows={4}
+            />
           </div>
 
           {isProfessional && (
             <div className="form-group">
-              <label className="form-label">Departments Involved</label>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                {departments.map((dept) => (
-                  <div key={dept.id} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <input
-                      type="checkbox"
-                      id={`dept-${dept.id}`}
-                      checked={selectedDepartments.includes(dept.id)}
-                      onChange={() => handleDepartmentChange(dept.id)}
-                    />
-                    <label htmlFor={`dept-${dept.id}`} style={{ minWidth: 60 }}>{dept.name}</label>
-                    {selectedDepartments.includes(dept.id) && (
-                      <input
-                        type="email"
-                        placeholder="Leader Email"
-                        value={leaderEmails[dept.id] || ''}
-                        onChange={e => handleLeaderEmailChange(dept.id, e.target.value)}
-                        style={{ flex: 1, minWidth: 180 }}
-                        required
-                      />
-                    )}
-                  </div>
-                ))}
+              <label>Departments</label>
+              <div className="departments-list">
+                {departments.map((dept) => {
+                  const isInvolved = alreadyInvolved.includes(dept.id);
+                  return (
+                    <div key={dept.id} className="department-item">
+                      <label className="department-label">
+                        <input
+                          type="checkbox"
+                          checked={selectedDepartments.includes(dept.id)}
+                          onChange={() => handleDepartmentChange(dept.id)}
+                          disabled={isInvolved}
+                        />
+                        <span className={isInvolved ? 'already-involved' : ''}>
+                          {dept.name}
+                          {isInvolved && ' (Already Involved)'}
+                        </span>
+                      </label>
+                      {selectedDepartments.includes(dept.id) && !isInvolved && (
+                        <input
+                          type="email"
+                          placeholder="Leader Email"
+                          value={leaderEmails[dept.id] || ''}
+                          onChange={(e) => handleLeaderEmailChange(dept.id, e.target.value)}
+                          required
+                        />
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             </div>
           )}

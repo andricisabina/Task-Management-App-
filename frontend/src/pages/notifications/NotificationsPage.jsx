@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useNotifications } from "../../context/NotificationContext";
 import api, { tasksApi, projectsApi } from "../../services/api";
 import { useAuth } from "../../context/AuthContext";
@@ -13,6 +13,9 @@ const NotificationsPage = () => {
   const [rejectReason, setRejectReason] = useState("");
   const [rejectLoading, setRejectLoading] = useState(false);
   const [pendingActions, setPendingActions] = useState({}); // { [taskId]: 'accepted' | 'rejected' }
+  const [modalTask, setModalTask] = useState(null);
+  const [modalOpen, setModalOpen] = useState(false);
+  const [modalLoading, setModalLoading] = useState(false);
 
   const handleAcceptTask = async (taskId) => {
     // Optimistically update UI
@@ -88,6 +91,21 @@ const NotificationsPage = () => {
     setShowRejectModal(true);
   };
 
+  const handleViewTask = async (taskId, type) => {
+    if (type === 'professional') {
+      setModalLoading(true);
+      try {
+        const response = await tasksApi.getProfessionalTask(taskId);
+        setModalTask(response.data);
+        setModalOpen(true);
+      } catch (err) {
+        toast.error('Failed to load task details');
+      } finally {
+        setModalLoading(false);
+      }
+    }
+  };
+
   return (
     <div style={{ padding: 32 }}>
       <h2>Notifications {unreadCount > 0 && <span style={{ color: "#ff5252" }}>({unreadCount} unread)</span>}</h2>
@@ -114,11 +132,11 @@ const NotificationsPage = () => {
             <div style={{ marginTop: 12, display: 'flex', gap: 8 }}>
               {n.type === 'task_assigned' && n.relatedId && (
                 <>
-                  {pendingActions[n.relatedId] === 'accepted' || n.taskStatus === 'accepted' || n.taskStatus === 'in-progress' ? (
+                  {n.taskStatus === 'accepted' || n.taskStatus === 'in-progress' ? (
                     <span style={{ color: '#4caf50', fontWeight: 600 }}>Task Accepted</span>
-                  ) : pendingActions[n.relatedId] === 'rejected' || n.taskStatus === 'rejected' ? (
+                  ) : n.taskStatus === 'rejected' ? (
                     <span style={{ color: '#f44336', fontWeight: 600 }}>Task Rejected</span>
-                  ) : (
+                  ) : n.taskStatus === 'pending' ? (
                     <>
                       <button
                         onClick={(e) => {
@@ -157,7 +175,7 @@ const NotificationsPage = () => {
                         Reject Task
                       </button>
                     </>
-                  )}
+                  ) : null}
                 </>
               )}
 
@@ -203,23 +221,41 @@ const NotificationsPage = () => {
               )}
 
               {n.type === 'task_assigned' && n.relatedId && n.link && (
-                <Link
-                  to={n.link}
-                  style={{
-                    background: "#1976d2",
-                    color: "#fff",
-                    border: "none",
-                    borderRadius: 6,
-                    padding: "8px 20px",
-                    fontWeight: 600,
-                    fontSize: 15,
-                    cursor: "pointer",
-                    textDecoration: "none"
-                  }}
-                  onClick={e => e.stopPropagation()}
-                >
-                  View Task
-                </Link>
+                n.relatedType === 'professional_task' ? (
+                  <button
+                    onClick={() => handleViewTask(n.relatedId, 'professional')}
+                    style={{
+                      background: "#1976d2",
+                      color: "#fff",
+                      border: "none",
+                      borderRadius: 6,
+                      padding: "8px 20px",
+                      fontWeight: 600,
+                      fontSize: 15,
+                      cursor: "pointer"
+                    }}
+                  >
+                    View Task
+                  </button>
+                ) : (
+                  <Link
+                    to={n.link}
+                    style={{
+                      background: "#1976d2",
+                      color: "#fff",
+                      border: "none",
+                      borderRadius: 6,
+                      padding: "8px 20px",
+                      fontWeight: 600,
+                      fontSize: 15,
+                      cursor: "pointer",
+                      textDecoration: "none"
+                    }}
+                    onClick={e => e.stopPropagation()}
+                  >
+                    View Task
+                  </Link>
+                )
               )}
             </div>
           </div>
@@ -304,6 +340,18 @@ const NotificationsPage = () => {
                 {rejectLoading ? "Rejecting..." : "Reject Task"}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {modalOpen && modalTask && (
+        <div className="modal-overlay" style={{zIndex: 2000}}>
+          <div className="modal-container" style={{maxWidth: 500, background: '#fff', borderRadius: 8, padding: 24, margin: '40px auto'}}>
+            <h2 style={{marginBottom: 12}}>{modalTask.title}</h2>
+            <p style={{marginBottom: 8}}>{modalTask.description}</p>
+            <p><b>Deadline:</b> {modalTask.dueDate ? new Date(modalTask.dueDate).toLocaleString() : 'N/A'}</p>
+            <p><b>Project:</b> {modalTask.ProfessionalProject?.title || 'N/A'}</p>
+            <button onClick={() => setModalOpen(false)} style={{marginTop: 16, background: '#1976d2', color: '#fff', border: 'none', borderRadius: 6, padding: '8px 20px', fontWeight: 600, fontSize: 15, cursor: 'pointer'}}>Close</button>
           </div>
         </div>
       )}

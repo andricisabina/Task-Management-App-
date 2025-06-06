@@ -48,6 +48,9 @@ export const projectsApi = {
   updateProfessionalProject: (id, data) => api.put(`/professional-projects/${id}`, data),
   deleteProfessionalProject: (id) => api.delete(`/professional-projects/${id}`),
 
+  // Add member to professional project
+  addProjectMember: (projectId, data) => api.post(`/professional-projects/${projectId}/members`, data),
+
   // Project Comments
   addProjectComment: (projectId, data) => api.post(`/professional-projects/${projectId}/comments`, data),
   getProjectComments: (projectId) => api.get(`/professional-projects/${projectId}/comments`),

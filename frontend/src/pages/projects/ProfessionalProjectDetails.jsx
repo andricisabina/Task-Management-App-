@@ -29,6 +29,8 @@ import ReactDOM from "react-dom"
 import { useAuth } from "../../context/AuthContext"
 import ConfirmModal from "../../components/ConfirmModal"
 import { useNotifications } from "../../context/NotificationContext"
+import AddMemberModal from '../../components/projects/AddMemberModal'
+import ProjectModal from '../../components/projects/ProjectModal'
 
 const ProfessionalProjectDetails = () => {
   const { projectId } = useParams()
@@ -58,6 +60,18 @@ const ProfessionalProjectDetails = () => {
   const [deleteConfirm, setDeleteConfirm] = useState({ open: false, comment: null })
   const [modalDepartments, setModalDepartments] = useState([])
   const { fetchNotifications } = useNotifications()
+  const [isAddMemberOpen, setIsAddMemberOpen] = useState(false)
+  const [addMemberDept, setAddMemberDept] = useState(null)
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false)
+  const [editProjectData, setEditProjectData] = useState(null)
+
+  const statusOptions = [
+    { value: 'todo', label: 'To Do' },
+    { value: 'in-progress', label: 'In Progress' },
+    { value: 'completed', label: 'Completed' },
+    { value: 'on-hold', label: 'On Hold' },
+    { value: 'cancelled', label: 'Cancelled' },
+  ];
 
   useEffect(() => {
     fetchProjectDetails()
@@ -150,7 +164,8 @@ const ProfessionalProjectDetails = () => {
       } else {
         response = await tasksApi.createProfessionalTask({
           ...taskData,
-          projectId: project.id
+          projectId: project.id,
+          status: 'pending',
         })
         setTasks([response.data, ...tasks])
         toast.success("Task created successfully")
@@ -164,13 +179,14 @@ const ProfessionalProjectDetails = () => {
 
   const handleStatusUpdate = async (taskId, newStatus) => {
     try {
+      console.log('handleStatusUpdate called', { taskId, newStatus });
       const taskToUpdate = tasks.find((task) => task.id === taskId)
       if (!taskToUpdate) return
-      
-      const response = await tasksApi.updateProfessionalTask(taskId, { 
-        ...taskToUpdate, 
-        status: newStatus 
-      })
+      let statusToSet = newStatus
+      if (newStatus === 'accepted') statusToSet = 'to do'
+      const payload = { ...taskToUpdate, status: statusToSet }
+      console.log('Payload sent to updateProfessionalTask:', payload)
+      const response = await tasksApi.updateProfessionalTask(taskId, payload)
       setTasks(tasks.map((task) => (task.id === taskId ? response.data : task)))
       toast.success("Task status updated")
       await fetchProjectDetails()
@@ -270,6 +286,22 @@ const ProfessionalProjectDetails = () => {
     return status.toLowerCase().replace(/\s+/g, '_')
   }
 
+  const handleEditProject = () => {
+    setEditProjectData(project);
+    setIsEditModalOpen(true);
+  };
+
+  const handleSaveEditProject = async (projectData) => {
+    try {
+      await projectsApi.updateProfessionalProject(project.id, projectData);
+      toast.success('Project updated successfully');
+      setIsEditModalOpen(false);
+      await fetchProjectDetails();
+    } catch (err) {
+      toast.error(err.message);
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="loading-container">
@@ -321,11 +353,35 @@ const ProfessionalProjectDetails = () => {
     return acc
   }, {})
 
-  const unassignedTasks = tasks.filter(task => !task.departmentId)
+  const unassignedTasks = tasks.filter(task => !task.departmentId && !task.assignedToId)
 
   if (isModalOpen) {
     console.log("Parent modalDepartments:", modalDepartments, "isModalOpen:", isModalOpen);
   }
+
+  function handleAttachFile(taskId, event) {
+    const file = event.target.files[0];
+    if (file) {
+      // TODO: Implement file upload logic here
+      toast.info(`File '${file.name}' selected for task ${taskId}`);
+    }
+  }
+
+  const openAddMemberModal = (dept) => {
+    setAddMemberDept(dept);
+    setIsAddMemberOpen(true);
+  };
+
+  const handleAddMember = async (userId, departmentId) => {
+    try {
+      await projectsApi.addProjectMember(project.id, { userId, departmentId });
+      toast.success('Member added successfully');
+      setIsAddMemberOpen(false);
+      await fetchProjectDetails();
+    } catch (err) {
+      toast.error(err.message);
+    }
+  };
 
   return (
     <div className="project-details-container">
@@ -362,26 +418,22 @@ const ProfessionalProjectDetails = () => {
           </div>
           <div className="meta-item">
             <Users size={16} />
-            <span>Manager: {project.creator?.name || project.creator?.email}</span>
+            <span><strong>Manager:</strong> {project.creator?.name || project.creator?.email || 'Unknown'}</span>
           </div>
+          {project.departments && project.departments.length > 0 && project.ProjectMembers && (
+            project.departments.map(dept => {
+              const leader = project.ProjectMembers?.find(
+                m => m.departmentId === dept.id && m.role === 'leader'
+              );
+              return (
+                <div className="meta-item" key={dept.id} style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 2 }}>
+                  <Users size={16} />
+                  <span><strong>{dept.name} Leader:</strong> {leader?.member?.name || leader?.member?.email || 'Not assigned'}</span>
+                </div>
+              );
+            })
+          )}
         </div>
-
-        {/* Department Leaders */}
-        {project.departments && project.departments.length > 0 && (
-          <div className="department-leaders" style={{ marginTop: 16 }}>
-            <h4 style={{ marginBottom: 8 }}>Department Leaders</h4>
-            <ul style={{ paddingLeft: 16 }}>
-              {project.departments.map(dept => (
-                <li key={dept.id} style={{ marginBottom: 4 }}>
-                  <strong>{dept.name}:</strong> {dept.ProjectDepartment?.leaderId ? 
-                    (project.Users?.find(u => u.id === dept.ProjectDepartment.leaderId)?.name || 
-                     project.Users?.find(u => u.id === dept.ProjectDepartment.leaderId)?.email || 
-                     'Invited') : 'Not assigned'}
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
       </div>
 
       <div className="tasks-section card">
@@ -403,32 +455,6 @@ const ProfessionalProjectDetails = () => {
             >
               <Filter size={16} />
               Filters
-            </button>
-          </div>
-          <div className="tasks-tabs">
-            <button
-              className={`tab-btn ${activeTab === "all" ? "active" : ""}`}
-              onClick={() => setActiveTab("all")}
-            >
-              All
-            </button>
-            <button
-              className={`tab-btn ${activeTab === "todo" ? "active" : ""}`}
-              onClick={() => setActiveTab("todo")}
-            >
-              To Do
-            </button>
-            <button
-              className={`tab-btn ${activeTab === "in_progress" ? "active" : ""}`}
-              onClick={() => setActiveTab("in_progress")}
-            >
-              In Progress
-            </button>
-            <button
-              className={`tab-btn ${activeTab === "completed" ? "active" : ""}`}
-              onClick={() => setActiveTab("completed")}
-            >
-              Completed
             </button>
           </div>
         </div>
@@ -478,40 +504,63 @@ const ProfessionalProjectDetails = () => {
                       isLeader
                     )
                     return (
-                      <div key={task.id} className="task-card card" style={{ 
-                        cursor: 'pointer', 
-                        marginBottom: 16,
-                        borderLeft: `4px solid ${getPriorityBorderColor(task.priority)}`
-                      }} onClick={() => navigate(`/tasks/professional/${task.id}`)}>
+                      <div key={task.id} className="task-card card" style={{ position: 'relative', cursor: 'default', marginBottom: 16, borderLeft: `4px solid ${getPriorityBorderColor(task.priority)}` }}>
                         <div className="task-header">
                           <h4 className={`task-title${task.status === "completed" ? " completed" : ""}`} style={{ color: getPriorityBorderColor(task.priority) }}>{task.title}</h4>
                           <div className="task-actions">
-                            {canUpdateStatus && (
-                              <button
-                                className="status-badge"
-                                style={{
-                                  backgroundColor: getStatusColor(task.status),
-                                  color: getStatusTextColor(task.status)
-                                }}
-                                onClick={(e) => {
-                                  e.stopPropagation()
-                                  setPopoverAnchor(e.currentTarget)
-                                  setOpenStatusDropdown(task.id)
-                                }}
-                              >
-                                {task.status}
-                              </button>
-                            )}
-                            <button
-                              className="task-dropdown-btn"
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                handleEditTask(task)
-                              }}
+                            <div
+                              style={{ position: 'absolute', top: 18, right: 18, zIndex: 9999 }}
+                              onMouseEnter={() => setHoveredStatusDropdown(task.id)}
+                              onMouseLeave={() => { setHoveredStatusDropdown(null); setOpenStatusDropdown(null); }}
                             >
-                              <MoreVertical size={16} />
-                            </button>
+                              {canUpdateStatus && task.assignedToId && (
+                                <span
+                                  className={`task-status-bar status-${task.status.replace('in-progress', 'inprogress').replace('completed', 'done')}`}
+                                  style={{
+                                    fontSize: '1.05rem',
+                                    padding: '8px 24px',
+                                    borderRadius: 12,
+                                    fontWeight: 600,
+                                    minWidth: 120,
+                                    maxWidth: 200,
+                                    textAlign: 'center',
+                                    boxShadow: '0 8px 24px rgba(0,0,0,0.18)',
+                                    display: 'inline-block',
+                                    width: 'auto',
+                                    cursor: 'pointer',
+                                    background: openStatusDropdown === task.id ? '#f0f4ff' : '#fff',
+                                    whiteSpace: 'nowrap',
+                                    border: '1px solid #e0e0e0',
+                                    transition: 'background 0.15s, box-shadow 0.15s',
+                                  }}
+                                  onClick={e => {
+                                    const rect = e.target.getBoundingClientRect();
+                                    setOpenStatusDropdown(openStatusDropdown === task.id ? null : task.id);
+                                    setPopoverAnchor(openStatusDropdown === task.id ? null : rect);
+                                  }}
+                                  onMouseEnter={e => e.target.style.background = '#f5f7fa'}
+                                  onMouseLeave={e => e.target.style.background = openStatusDropdown === task.id ? '#f0f4ff' : '#fff'}
+                                >
+                                  {task.status === 'todo' ? 'To Do' : task.status === 'in-progress' ? 'In Progress' : task.status === 'completed' ? 'Completed' : task.status === 'on-hold' ? 'On Hold' : task.status === 'cancelled' ? 'Cancelled' : task.status.replace(/\b\w/g, l => l.toUpperCase())}
+                                </span>
+                              )}
+                              {openStatusDropdown === task.id && (
+                                <StatusPopover
+                                  anchorRect={popoverAnchor}
+                                  options={statusOptions}
+                                  currentStatus={task.status}
+                                  onSelect={value => handleStatusUpdate(task.id, value)}
+                                  onClose={() => { setOpenStatusDropdown(null); setPopoverAnchor(null); }}
+                                  getStatusTextColor={getStatusTextColor}
+                                  getStatusColor={getStatusColor}
+                                />
+                              )}
+                            </div>
                           </div>
+                        </div>
+                        {/* Assignee display */}
+                        <div className="task-assignee" style={{ margin: '4px 0 0 0', fontSize: '1.01rem', color: '#555', fontWeight: 500 }}>
+                          Assigned to: {task.assignedTo?.name || task.assignedTo?.email || 'Unassigned'}
                         </div>
                         <p className="task-description">{task.description}</p>
                         <div className="task-meta">
@@ -523,11 +572,39 @@ const ProfessionalProjectDetails = () => {
                               Due: {formatDate(task.dueDate)}
                             </span>
                           )}
-                          {task.assignedTo && (
-                            <span className="assigned-to">
-                              Assigned to: {task.assignedTo.name}
-                            </span>
-                          )}
+                        </div>
+                        <div className="task-actions-bar" style={{ display: 'flex', gap: 12, marginTop: 12 }}>
+                          <button
+                            className="action-btn edit-btn"
+                            onClick={() => handleEditTask(task)}
+                          >
+                            Edit
+                          </button>
+                          <button
+                            className="action-btn attach-btn"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              document.getElementById(`file-input-${task.id}`).click();
+                            }}
+                            title="Attach File"
+                          >
+                            📎 Attach
+                          </button>
+                          <input
+                            id={`file-input-${task.id}`}
+                            type="file"
+                            style={{ display: 'none' }}
+                            onChange={e => handleAttachFile(task.id, e)}
+                          />
+                          <button
+                            className="action-btn delete-btn"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDeleteTask(task.id);
+                            }}
+                          >
+                            Delete
+                          </button>
                         </div>
                       </div>
                     )
@@ -559,36 +636,63 @@ const ProfessionalProjectDetails = () => {
                   cursor: 'pointer', 
                   marginBottom: 16,
                   borderLeft: `4px solid ${getPriorityBorderColor(task.priority)}`
-                }} onClick={() => navigate(`/tasks/professional/${task.id}`)}>
+                }}>
                   <div className="task-header">
                     <h4 className={`task-title${task.status === "completed" ? " completed" : ""}`} style={{ color: getPriorityBorderColor(task.priority) }}>{task.title}</h4>
                     <div className="task-actions">
-                      {canUpdateStatus && (
-                        <button
-                          className="status-badge"
-                          style={{
-                            backgroundColor: getStatusColor(task.status),
-                            color: getStatusTextColor(task.status)
-                          }}
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            setPopoverAnchor(e.currentTarget)
-                            setOpenStatusDropdown(task.id)
-                          }}
-                        >
-                          {task.status}
-                        </button>
-                      )}
-                      <button
-                        className="task-dropdown-btn"
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          handleEditTask(task)
-                        }}
+                      <div
+                        style={{ position: 'absolute', top: 18, right: 18, zIndex: 9999 }}
+                        onMouseEnter={() => setHoveredStatusDropdown(task.id)}
+                        onMouseLeave={() => { setHoveredStatusDropdown(null); setOpenStatusDropdown(null); }}
                       >
-                        <MoreVertical size={16} />
-                      </button>
+                        {canUpdateStatus && task.assignedToId && (
+                          <span
+                            className={`task-status-bar status-${task.status.replace('in-progress', 'inprogress').replace('completed', 'done')}`}
+                            style={{
+                              fontSize: '1.05rem',
+                              padding: '8px 24px',
+                              borderRadius: 12,
+                              fontWeight: 600,
+                              minWidth: 120,
+                              maxWidth: 200,
+                              textAlign: 'center',
+                              boxShadow: '0 8px 24px rgba(0,0,0,0.18)',
+                              display: 'inline-block',
+                              width: 'auto',
+                              cursor: 'pointer',
+                              background: openStatusDropdown === task.id ? '#f0f4ff' : '#fff',
+                              whiteSpace: 'nowrap',
+                              border: '1px solid #e0e0e0',
+                              transition: 'background 0.15s, box-shadow 0.15s',
+                            }}
+                            onClick={e => {
+                              const rect = e.target.getBoundingClientRect();
+                              setOpenStatusDropdown(openStatusDropdown === task.id ? null : task.id);
+                              setPopoverAnchor(openStatusDropdown === task.id ? null : rect);
+                            }}
+                            onMouseEnter={e => e.target.style.background = '#f5f7fa'}
+                            onMouseLeave={e => e.target.style.background = openStatusDropdown === task.id ? '#f0f4ff' : '#fff'}
+                          >
+                            {task.status === 'todo' ? 'To Do' : task.status === 'in-progress' ? 'In Progress' : task.status === 'completed' ? 'Completed' : task.status === 'on-hold' ? 'On Hold' : task.status === 'cancelled' ? 'Cancelled' : task.status.replace(/\b\w/g, l => l.toUpperCase())}
+                          </span>
+                        )}
+                        {openStatusDropdown === task.id && (
+                          <StatusPopover
+                            anchorRect={popoverAnchor}
+                            options={statusOptions}
+                            currentStatus={task.status}
+                            onSelect={value => handleStatusUpdate(task.id, value)}
+                            onClose={() => { setOpenStatusDropdown(null); setPopoverAnchor(null); }}
+                            getStatusTextColor={getStatusTextColor}
+                            getStatusColor={getStatusColor}
+                          />
+                        )}
+                      </div>
                     </div>
+                  </div>
+                  {/* Assignee display */}
+                  <div className="task-assignee" style={{ margin: '4px 0 0 0', fontSize: '1.01rem', color: '#555', fontWeight: 500 }}>
+                    Assigned to: {task.assignedTo?.name || task.assignedTo?.email || 'Unassigned'}
                   </div>
                   <p className="task-description">{task.description}</p>
                   <div className="task-meta">
@@ -600,11 +704,39 @@ const ProfessionalProjectDetails = () => {
                         Due: {formatDate(task.dueDate)}
                       </span>
                     )}
-                    {task.assignedTo && (
-                      <span className="assigned-to">
-                        Assigned to: {task.assignedTo.name}
-                      </span>
-                    )}
+                  </div>
+                  <div className="task-actions-bar" style={{ display: 'flex', gap: 12, marginTop: 12 }}>
+                    <button
+                      className="action-btn edit-btn"
+                      onClick={() => handleEditTask(task)}
+                    >
+                      Edit
+                    </button>
+                    <button
+                      className="action-btn attach-btn"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        document.getElementById(`file-input-${task.id}`).click();
+                      }}
+                      title="Attach File"
+                    >
+                      📎 Attach
+                    </button>
+                    <input
+                      id={`file-input-${task.id}`}
+                      type="file"
+                      style={{ display: 'none' }}
+                      onChange={e => handleAttachFile(task.id, e)}
+                    />
+                    <button
+                      className="action-btn delete-btn"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDeleteTask(task.id);
+                      }}
+                    >
+                      Delete
+                    </button>
                   </div>
                 </div>
               )
@@ -826,28 +958,64 @@ const ProfessionalProjectDetails = () => {
         />
       )}
 
-      {openStatusDropdown && (
-        <StatusPopover
-          anchorEl={popoverAnchor}
-          options={["todo", "in_progress", "completed"]}
-          currentStatus={tasks.find(t => t.id === openStatusDropdown)?.status}
-          onSelect={(status) => {
-            handleStatusUpdate(openStatusDropdown, status)
-            setOpenStatusDropdown(null)
-          }}
-          onClose={() => setOpenStatusDropdown(null)}
-          getStatusTextColor={getStatusTextColor}
-          getStatusColor={getStatusColor}
+      {/* Project Members Section */}
+      <div className="project-members card" style={{ marginBottom: 32, marginTop: 32 }}>
+        <h3 style={{ marginBottom: 16 }}>Project Members</h3>
+        {project.departments && project.departments.length > 0 && project.ProjectMembers && (
+          project.departments.map(dept => {
+            const deptMembers = project.ProjectMembers.filter(m => m.departmentId === dept.id);
+            const isLeader = deptMembers.some(m => m.role === 'leader' && m.userId === currentUser.id && m.status === 'accepted');
+            const canAdd = isLeader || (project.creator && project.creator.id === currentUser.id);
+            return (
+              <div key={dept.id} style={{ marginBottom: 18, padding: 12, border: '1px solid #eee', borderRadius: 8 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                  <span style={{ fontWeight: 600 }}>{dept.name}</span>
+                  {canAdd && (
+                    <button className="btn btn-sm btn-primary" style={{ marginLeft: 8 }} onClick={() => openAddMemberModal(dept)}>
+                      <Plus size={14} /> Add Member
+                    </button>
+                  )}
+                </div>
+                <ul style={{ margin: 0, padding: 0, listStyle: 'none' }}>
+                  {deptMembers.length > 0 ? deptMembers.map(m => (
+                    <li key={m.userId} style={{ padding: '2px 0', color: m.role === 'leader' ? '#1890ff' : '#333', fontWeight: m.role === 'leader' ? 600 : 400 }}>
+                      {m.member?.name || m.member?.email || 'Unknown'} {m.role === 'leader' && '(Leader)'}
+                    </li>
+                  )) : <li style={{ color: '#888' }}>No members</li>}
+                </ul>
+              </div>
+            );
+          })
+        )}
+        {/* Members not in any department */}
+        {project.ProjectMembers && project.ProjectMembers.filter(m => !m.departmentId).length > 0 && (
+          <div style={{ marginBottom: 18, padding: 12, border: '1px solid #eee', borderRadius: 8 }}>
+            <div style={{ fontWeight: 600, marginBottom: 6 }}>No Department</div>
+            <ul style={{ margin: 0, padding: 0, listStyle: 'none' }}>
+              {project.ProjectMembers.filter(m => !m.departmentId).map(m => (
+                <li key={m.userId} style={{ padding: '2px 0', color: m.role === 'manager' ? '#52c41a' : '#333', fontWeight: m.role === 'manager' ? 600 : 400 }}>
+                  {m.member?.name || m.member?.email || 'Unknown'} {m.role === 'manager' && '(Manager)'}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </div>
+      {isAddMemberOpen && (
+        <AddMemberModal
+          open={isAddMemberOpen}
+          onClose={() => setIsAddMemberOpen(false)}
+          onAdd={handleAddMember}
+          department={addMemberDept}
+          projectId={project.id}
         />
       )}
-
-      {deleteConfirm.open && (
-        <ConfirmModal
-          isOpen={deleteConfirm.open}
-          onClose={() => setDeleteConfirm({ open: false, comment: null })}
-          onConfirm={confirmDeleteComment}
-          title="Delete Comment"
-          message="Are you sure you want to delete this comment? This action cannot be undone."
+      {isEditModalOpen && (
+        <ProjectModal
+          project={editProjectData}
+          isProfessional={true}
+          onClose={() => setIsEditModalOpen(false)}
+          onSave={handleSaveEditProject}
         />
       )}
     </div>
@@ -910,49 +1078,64 @@ function getPriorityBorderColor(priority) {
   }
 }
 
-function StatusPopover({ anchorEl, options, currentStatus, onSelect, onClose, getStatusTextColor, getStatusColor }) {
+function StatusPopover({ anchorRect, options, currentStatus, onSelect, onClose, getStatusTextColor, getStatusColor }) {
   const popoverRef = useRef(null)
-
-  function handleClickOutside(event) {
-    if (popoverRef.current && !popoverRef.current.contains(event.target)) {
-      onClose()
-    }
-  }
-
+  const ignoreNextClick = useRef(true)
   useEffect(() => {
-    document.addEventListener("mousedown", handleClickOutside)
-    return () => {
-      document.removeEventListener("mousedown", handleClickOutside)
+    function handleClickOutside(event) {
+      if (ignoreNextClick.current) {
+        ignoreNextClick.current = false;
+        return;
+      }
+      if (popoverRef.current && !popoverRef.current.contains(event.target)) {
+        onClose()
+      }
     }
-  }, [])
-
-  if (!anchorEl) return null
-
-  const rect = anchorEl.getBoundingClientRect()
-
+    document.addEventListener("click", handleClickOutside)
+    return () => document.removeEventListener("click", handleClickOutside)
+  }, [onClose])
+  if (!anchorRect) return null
   return ReactDOM.createPortal(
     <div
       ref={popoverRef}
-      className="status-popover"
       style={{
-        position: "fixed",
-        top: rect.bottom + window.scrollY + 8,
-        left: rect.left + window.scrollX,
-        zIndex: 1000,
+        position: 'fixed',
+        top: anchorRect.bottom + 6,
+        left: anchorRect.right - 140,
+        background: '#fff',
+        border: '1px solid #eee',
+        borderRadius: 10,
+        boxShadow: '0 8px 24px rgba(0,0,0,0.18)',
+        zIndex: 999999,
+        minWidth: 140,
+        maxWidth: 180,
+        maxHeight: 320,
+        overflowY: 'visible',
+        transition: 'opacity 0.15s',
+        pointerEvents: 'auto',
       }}
     >
-      {options.map((status) => (
-        <button
-          key={status}
-          className="status-option"
+      {options.map(option => (
+        <div
+          key={option.value}
+          tabIndex={0}
           style={{
-            backgroundColor: getStatusColor(status),
-            color: getStatusTextColor(status),
+            padding: '8px 12px',
+            cursor: 'pointer',
+            color: getStatusTextColor(option.value),
+            background: currentStatus === option.value ? getStatusColor(option.value) : '#fff',
+            fontWeight: currentStatus === option.value ? 700 : 500,
+            fontSize: '1.01rem',
+            whiteSpace: 'nowrap',
+            pointerEvents: 'auto',
           }}
-          onClick={() => onSelect(status)}
+          onMouseDown={async () => {
+            await onSelect(option.value);
+            onClose();
+          }}
         >
-          {status.replace(/_/g, " ")}
-        </button>
+          {option.label}
+        </div>
       ))}
     </div>,
     document.body

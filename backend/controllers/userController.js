@@ -188,3 +188,14 @@ exports.getUsersByDepartment = asyncHandler(async (req, res, next) => {
     data: users
   });
 });
+
+// @desc    Search user by email
+// @route   GET /api/users/search
+// @access  Private
+exports.searchUserByEmail = asyncHandler(async (req, res, next) => {
+  const { email } = req.query;
+  if (!email) return next(new ErrorResponse('Email required', 400));
+  const user = await User.findOne({ where: { email }, attributes: ['id', 'name', 'email'] });
+  if (!user) return next(new ErrorResponse('User not found', 404));
+  res.status(200).json({ user });
+});
