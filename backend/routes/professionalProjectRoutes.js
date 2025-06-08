@@ -48,4 +48,6 @@ router.route('/:id/comments/:commentId')
 router.post('/:id/accept-leader', acceptLeaderInvitation);
 router.post('/:id/reject-leader', rejectLeaderInvitation);
 
+router.get('/accept-leader-invitation', acceptLeaderInvitation);
+
 module.exports = router;

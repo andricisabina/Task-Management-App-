@@ -220,27 +220,26 @@ exports.createProfessionalTask = asyncHandler(async (req, res, next) => {
   // Add assigner ID to body
   req.body.assignedById = req.user.id;
 
-  // Check if project exists
-  const project = await ProfessionalProject.findByPk(req.body.projectId, {
-    include: [{
-      model: ProjectMember,
-      as: 'ProjectMembers',
-      where: { userId: req.user.id },
-      required: false
-    }]
-  });
-  
+  // Fetch the project
+  const project = await ProfessionalProject.findByPk(req.body.projectId);
   if (!project) {
-    return next(new ErrorResponse(`Project not found with id of ${req.body.projectId}`, 404));
+    return next(new ErrorResponse('Project not found', 404));
   }
 
-  // Check if user is project creator or team leader
-  const isProjectCreator = project.creatorId === req.user.id;
-  const isTeamLeader = project.ProjectMembers && project.ProjectMembers.some(member => 
-    member.role === 'leader' && member.status === 'accepted'
-  );
+  // Check if the user is the project manager (creator)
+  const isManager = project.creatorId === req.user.id;
 
-  if (!isProjectCreator && !isTeamLeader && req.user.role !== 'admin') {
+  // Check if the user is a leader for this project (accepted)
+  const isLeader = await ProjectMember.findOne({
+    where: {
+      userId: req.user.id,
+      projectId: project.id,
+      role: 'leader',
+      status: 'accepted'
+    }
+  });
+
+  if (!isManager && !isLeader) {
     return next(new ErrorResponse('Only the project manager or team leaders can create tasks for this project', 403));
   }
 
@@ -373,6 +372,71 @@ exports.updateProfessionalTask = asyncHandler(async (req, res, next) => {
   // Update task
   await task.update(req.body);
 
+  // --- PROJECT COMPLETION LOGIC START ---
+  // If task is part of a project and is now completed, check if all tasks are completed/cancelled/rejected
+  if (task.projectId && req.body.status === 'completed') {
+    const incompleteTasks = await ProfessionalTask.count({
+      where: {
+        projectId: task.projectId,
+        status: { [Op.notIn]: ['completed', 'cancelled', 'rejected'] }
+      }
+    });
+    if (incompleteTasks === 0) {
+      // All tasks are completed/cancelled/rejected, mark project as completed
+      const project = await ProfessionalProject.findByPk(task.projectId);
+      if (project && project.status !== 'completed') {
+        try {
+          await project.update({ status: 'completed' });
+          // Get socket.io instance
+          const io = req.app.get('io');
+          // Find all department leaders for this project
+          const leaders = await ProjectMember.findAll({
+            where: {
+              projectId: project.id,
+              role: 'leader',
+              status: 'accepted'
+            },
+            include: [{ model: User, as: 'member', attributes: ['id', 'name', 'email'] }]
+          });
+          // Notify project creator
+          const notifications = [];
+          notifications.push(await Notification.create({
+            userId: project.creatorId,
+            title: 'Project Completed',
+            message: `Your professional project "${project.title}" has been marked as completed.`,
+            type: 'project_update',
+            relatedId: project.id,
+            relatedType: 'professional_project',
+            link: `/projects/professional/${project.id}`
+          }));
+          if (io) {
+            io.to(`user_${project.creatorId}`).emit('notification', notifications[0].toJSON());
+          }
+          // Notify all department leaders
+          for (const leader of leaders) {
+            if (leader.userId !== project.creatorId) { // Avoid duplicate notification if creator is also a leader
+              const notif = await Notification.create({
+                userId: leader.userId,
+                title: 'Project Completed',
+                message: `The professional project "${project.title}" you lead has been marked as completed.`,
+                type: 'project_update',
+                relatedId: project.id,
+                relatedType: 'professional_project',
+                link: `/projects/professional/${project.id}`
+              });
+              if (io) {
+                io.to(`user_${leader.userId}`).emit('notification', notif.toJSON());
+              }
+            }
+          }
+        } catch (err) {
+          console.error('[ERROR] Failed to handle professional project completion:', err);
+        }
+      }
+    }
+  }
+  // --- PROJECT COMPLETION LOGIC END ---
+
   // Notify all involved users (except the updater) on any update
   const involvedUserIds = new Set();
   if (task.assignedToId) involvedUserIds.add(task.assignedToId);
@@ -407,9 +471,18 @@ exports.updateProfessionalTask = asyncHandler(async (req, res, next) => {
   }
 
   // Notify all other involved users
+  const io = req.app.get('io');
   for (const userId of involvedUserIds) {
     await Notification.create({
       userId,
+      title: 'Task Updated',
+      message: `Task "${task.title}" has been updated`,
+      type: 'task_updated',
+      relatedId: task.id,
+      relatedType: 'professional_task',
+      link: `/tasks/professional/${task.id}`
+    });
+    io.to(`user_${userId}`).emit('notification', {
       title: 'Task Updated',
       message: `Task "${task.title}" has been updated`,
       type: 'task_updated',
@@ -542,6 +615,7 @@ exports.addComment = asyncHandler(async (req, res, next) => {
   if (task.ProfessionalProject && task.ProfessionalProject.creatorId) involvedUserIds.add(task.ProfessionalProject.creatorId);
   involvedUserIds.delete(req.user.id);
   const sendEmail = require('../utils/sendEmail');
+  const io = req.app.get('io');
   for (const userId of involvedUserIds) {
     await Notification.create({
       userId,
@@ -563,6 +637,14 @@ exports.addComment = asyncHandler(async (req, res, next) => {
         });
       } catch (e) { console.error('Failed to send email:', e); }
     }
+    io.to(`user_${userId}`).emit('notification', {
+      title: 'New Comment on Task',
+      message: `${req.user.name} commented on task: ${task.title} in project ${task.ProfessionalProject.title}\n\nComment: ${req.body.content}`,
+      type: 'comment_added',
+      relatedId: task.id,
+      relatedType: 'professional_task',
+      link: `/tasks/professional/${task.id}`
+    });
   }
   res.status(201).json({
     success: true,
@@ -856,6 +938,10 @@ exports.acceptProfessionalTask = asyncHandler(async (req, res, next) => {
     link: `/tasks/professional/${task.id}`
   });
   await Notification.bulkCreate(notifications);
+  const io = req.app.get('io');
+  notifications.forEach(n => {
+    io.to(`user_${n.userId}`).emit('notification', n);
+  });
   // Send emails
   const sendEmail = require('../utils/sendEmail');
   for (const n of notifications) {
@@ -910,6 +996,10 @@ exports.rejectProfessionalTask = asyncHandler(async (req, res, next) => {
     link: `/tasks/professional/${task.id}`
   });
   await Notification.bulkCreate(notifications);
+  const io = req.app.get('io');
+  notifications.forEach(n => {
+    io.to(`user_${n.userId}`).emit('notification', n);
+  });
   // Send emails
   const sendEmail = require('../utils/sendEmail');
   for (const n of notifications) {
@@ -977,6 +1067,10 @@ exports.requestDeadlineExtension = asyncHandler(async (req, res, next) => {
     }
   });
   await Notification.bulkCreate(notifications);
+  const io = req.app.get('io');
+  notifications.forEach(n => {
+    io.to(`user_${n.userId}`).emit('notification', n);
+  });
   // Send emails
   const sendEmail = require('../utils/sendEmail');
   for (const n of notifications) {
@@ -1043,6 +1137,15 @@ exports.approveDeadlineExtension = asyncHandler(async (req, res, next) => {
       } catch (e) { console.error('Failed to send email:', e); }
     }
   }
+  const io = req.app.get('io');
+  io.to(`user_${task.assignedToId}`).emit('notification', {
+    title: 'Deadline Extension Approved',
+    message: `Your deadline extension request for task: ${task.title} in project ${task.ProfessionalProject.title} was approved. New due date: ${newDueDate.toLocaleString()}`,
+    type: 'extension_response',
+    relatedId: task.id,
+    relatedType: 'professional_task',
+    link: `/tasks/professional/${task.id}`
+  });
   res.status(200).json({ success: true, data: task });
 });
 
@@ -1090,7 +1193,41 @@ exports.rejectDeadlineExtension = asyncHandler(async (req, res, next) => {
       } catch (e) { console.error('Failed to send email:', e); }
     }
   }
+  const io = req.app.get('io');
+  io.to(`user_${task.assignedToId}`).emit('notification', {
+    title: 'Deadline Extension Rejected',
+    message: `Your deadline extension request for task: ${task.title} in project ${task.ProfessionalProject.title} was rejected.`,
+    type: 'extension_response',
+    relatedId: task.id,
+    relatedType: 'professional_task',
+    link: `/tasks/professional/${task.id}`
+  });
   res.status(200).json({ success: true, data: task });
+});
+
+// @desc    Delete an attachment
+// @route   DELETE /api/attachments/:id
+// @access  Private
+exports.deleteAttachment = asyncHandler(async (req, res, next) => {
+  console.log('DELETE /api/attachments/:id called');
+  console.log('req.user:', req.user);
+  console.log('req.params.id:', req.params.id);
+  const attachment = await Attachment.findByPk(req.params.id);
+  console.log('Found attachment:', attachment);
+  if (!attachment) {
+    return next(new ErrorResponse('Attachment not found', 404));
+  }
+  if (attachment.uploadedBy !== req.user.id && req.user.role !== 'admin') {
+    console.log('Not authorized: uploadedBy:', attachment.uploadedBy, 'user.id:', req.user.id, 'user.role:', req.user.role);
+    return next(new ErrorResponse('Not authorized to delete this attachment', 403));
+  }
+  // Remove file from disk
+  const filePath = path.join(__dirname, '..', attachment.filePath);
+  if (fs.existsSync(filePath)) {
+    fs.unlinkSync(filePath);
+  }
+  await attachment.destroy();
+  res.status(200).json({ success: true });
 });
 
 module.exports = exports;

@@ -19,6 +19,7 @@ import "react-toastify/dist/ReactToastify.css"
 import "./App.css"
 import ProductivityReport from "./pages/reports/ProductivityReport"
 import ProfessionalTaskDetails from "./pages/tasks/ProfessionalTaskDetails"
+import SocketTest from './components/SocketTest'
 
 function App() {
   return (
@@ -47,6 +48,7 @@ function App() {
               <Route path="/notifications" element={<NotificationsPage />} />
               <Route path="/reports/productivity" element={<ProductivityReport />} />
               <Route path="/tasks/professional/:id" element={<ProfessionalTaskDetails />} />
+              <Route path="/socket-test" element={<SocketTest />} />
             </Route>
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>

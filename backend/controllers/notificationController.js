@@ -40,11 +40,40 @@ exports.getNotifications = asyncHandler(async (req, res, next) => {
     }
   });
   
+  const acceptedStatuses = ['in-progress', 'accepted', 'review', 'completed', 'deadline-extension-requested'];
+  
+  // Enhance notifications with task status for professional tasks
+  const enhancedNotifications = await Promise.all(
+    notifications.map(async (n) => {
+      if (n.relatedType === 'professional_task' && n.relatedId) {
+        try {
+          const { ProfessionalTask } = require('../models');
+          const task = await ProfessionalTask.findByPk(n.relatedId);
+          if (task) {
+            return {
+              ...n.toJSON(),
+              taskStatus: task.status,
+              taskAccepted: acceptedStatuses.includes(task.status)
+                ? true
+                : (task.status === 'rejected' ? false : null)
+            };
+          } else {
+            return { ...n.toJSON(), taskStatus: 'deleted', taskAccepted: null };
+          }
+        } catch {
+          return { ...n.toJSON(), taskStatus: 'deleted', taskAccepted: null };
+        }
+      }
+      return n.toJSON();
+    })
+  );
+  
+  console.log('Enhanced notifications:', JSON.stringify(enhancedNotifications, null, 2));
   res.status(200).json({
     success: true,
-    count: notifications.length,
+    count: enhancedNotifications.length,
     unreadCount,
-    data: notifications
+    data: enhancedNotifications
   });
 });
 
@@ -78,7 +107,10 @@ exports.createNotification = asyncHandler(async (req, res, next) => {
     return next(new ErrorResponse(`Not authorized to create notifications for other users`, 401));
   }
   
+  const io = req.app.get('io');
+  
   const notification = await Notification.create(req.body);
+  io.to(`user_${req.body.userId}`).emit('notification', req.body);
   
   res.status(201).json({
     success: true,

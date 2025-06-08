@@ -51,6 +51,7 @@ const PersonalProjectDetails = () => {
     { value: 'on-hold', label: 'On Hold' },
     { value: 'cancelled', label: 'Cancelled' },
   ];
+  const [deleteProjectConfirm, setDeleteProjectConfirm] = useState(false);
 
   const statusOrder = {
     'todo': 1,
@@ -189,6 +190,21 @@ const PersonalProjectDetails = () => {
   const normalizeStatus = (status) => {
     return status.toLowerCase().replace(/\s+/g, '_')
   }
+
+  const handleDeleteProject = () => {
+    setDeleteProjectConfirm(true);
+  };
+
+  const confirmDeleteProject = async () => {
+    try {
+      await projectsApi.deletePersonalProject(project.id);
+      toast.success("Project deleted successfully");
+      navigate("/projects/personal");
+    } catch (err) {
+      toast.error(err.message);
+      setDeleteProjectConfirm(false);
+    }
+  };
 
   if (isLoading) {
     return (
@@ -474,6 +490,24 @@ const PersonalProjectDetails = () => {
           getStatusTextColor={getStatusTextColor}
           getStatusColor={getStatusColor}
         />
+      )}
+
+      {deleteProjectConfirm && (
+        <div className="modal-overlay">
+          <div className="modal-container">
+            <div className="modal-header">
+              <h3>Delete Project</h3>
+              <button className="close-btn" onClick={() => setDeleteProjectConfirm(false)}>×</button>
+            </div>
+            <div className="modal-form">
+              <p>Are you sure you want to delete this project? This action cannot be undone.</p>
+              <div className="modal-actions">
+                <button className="btn btn-secondary" onClick={() => setDeleteProjectConfirm(false)}>Cancel</button>
+                <button className="btn btn-danger" onClick={confirmDeleteProject}>Delete</button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )

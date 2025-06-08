@@ -78,12 +78,30 @@ exports.createComment = asyncHandler(async (req, res, next) => {
       relatedType: 'professional_task',
       link: `/tasks/professional/${task.id}`
     });
+    const io = req.app.get('io');
+    io.to(`user_${task.assignedToId}`).emit('notification', {
+      title: 'New Comment on Task',
+      message: `${req.user.name} commented on task "${task.title}"`,
+      type: 'comment_added',
+      relatedId: task.id,
+      relatedType: 'professional_task',
+      link: `/tasks/professional/${task.id}`
+    });
   }
   
   // Create notification for task assigner if the commenter is not the assigner
   if (task.assignedById && task.assignedById !== req.user.id && task.assignedById !== task.assignedToId) {
     await Notification.create({
       userId: task.assignedById,
+      title: 'New Comment on Task',
+      message: `${req.user.name} commented on task "${task.title}"`,
+      type: 'comment_added',
+      relatedId: task.id,
+      relatedType: 'professional_task',
+      link: `/tasks/professional/${task.id}`
+    });
+    const io = req.app.get('io');
+    io.to(`user_${task.assignedById}`).emit('notification', {
       title: 'New Comment on Task',
       message: `${req.user.name} commented on task "${task.title}"`,
       type: 'comment_added',

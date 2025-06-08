@@ -16,10 +16,8 @@ const NotificationsPage = () => {
   const [modalTask, setModalTask] = useState(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [modalLoading, setModalLoading] = useState(false);
-  const [taskStatuses, setTaskStatuses] = useState({}); // { [taskId]: status }
   const [extensionLoading, setExtensionLoading] = useState({}); // { [taskId]: 'approving' | 'rejecting' }
   const [extensionStatuses, setExtensionStatuses] = useState({}); // { [taskId]: extensionStatus }
-  const fetchedTaskIds = useRef(new Set());
 
   const handleAcceptTask = async (taskId) => {
     // Optimistically update UI
@@ -103,7 +101,11 @@ const NotificationsPage = () => {
         setModalTask(response.data);
         setModalOpen(true);
       } catch (err) {
-        toast.error('Failed to load task details');
+        if (err.message && (err.message.toLowerCase().includes('not found') || err.message.toLowerCase().includes('404'))){
+          toast.error('Task not found or has been deleted.');
+        } else {
+          toast.error('Failed to load task details');
+        }
       } finally {
         setModalLoading(false);
       }
@@ -136,72 +138,63 @@ const NotificationsPage = () => {
     }
   };
 
-  useEffect(() => {
-    // Fetch statuses for all professional task_assigned and extension_requested notifications
-    const fetchStatuses = async () => {
-      const promises = notifications
-        .filter((n) => (n.type === 'task_assigned' || n.type === 'extension_requested') && n.relatedType === 'professional_task' && n.relatedId && !fetchedTaskIds.current.has(n.relatedId))
-        .map(async (n) => {
-          try {
-            const response = await tasksApi.getProfessionalTask(n.relatedId);
-            fetchedTaskIds.current.add(n.relatedId);
-            return { taskId: n.relatedId, status: response.data.status, extensionStatus: response.data.extensionStatus };
-          } catch {
-            return { taskId: n.relatedId, status: null, extensionStatus: null };
-          }
-        });
-      const results = await Promise.all(promises);
-      setTaskStatuses((prev) => {
-        const updated = { ...prev };
-        results.forEach(({ taskId, status }) => {
-          if (taskId) updated[taskId] = status;
-        });
-        return updated;
-      });
-      setExtensionStatuses((prev) => {
-        const updated = { ...prev };
-        results.forEach(({ taskId, extensionStatus }) => {
-          if (taskId) updated[taskId] = extensionStatus;
-        });
-        return updated;
-      });
-    };
-    fetchStatuses();
-  }, [notifications]);
+  const filteredNotifications = notifications.filter((n) => {
+    if ((n.type === 'task_assigned' || n.type === 'extension_requested') && n.relatedType === 'professional_task' && n.relatedId) {
+      return true;
+    }
+    return false;
+  });
 
   return (
     <div style={{ padding: 32 }}>
       <h2>Notifications {unreadCount > 0 && <span style={{ color: "#ff5252" }}>({unreadCount} unread)</span>}</h2>
       {notifications.length === 0 && <div>No notifications</div>}
       <div>
-        {notifications.map((n) => (
-          <div
-            key={n.id}
-            style={{
-              background: n.isRead ? "#f9f9f9" : "#f0f6ff",
-              padding: 16,
-              margin: "16px 0",
-              borderRadius: 8,
-              boxShadow: "0 1px 4px rgba(0,0,0,0.04)",
-              cursor: "pointer",
-            }}
-            onClick={() => markAsRead(n.id)}
-          >
-            <div style={{ fontWeight: 600 }}>{n.title}</div>
-            <div>{n.message}</div>
-            <div style={{ fontSize: 12, color: "#888" }}>{new Date(n.createdAt).toLocaleString()}</div>
-            
-            {/* Action buttons based on notification type */}
-            <div style={{ marginTop: 12, display: 'flex', gap: 8 }}>
-              {n.type === 'task_assigned' && n.relatedId && n.relatedType === 'professional_task' && (
-                (() => {
-                  const status = taskStatuses[n.relatedId];
-                  if (status === 'in-progress' || status === 'accepted' || status === 'review' || status === 'completed' || status === 'deadline-extension-requested') {
-                    return <span style={{ color: '#4caf50', fontWeight: 600 }}>Task Accepted</span>;
-                  } else if (status === 'rejected') {
-                    return <span style={{ color: '#f44336', fontWeight: 600 }}>Task Rejected</span>;
-                  } else if (status === 'pending') {
-                    return <>
+        {notifications.map((n) => {
+          if ((n.type === 'task_assigned' || n.type === 'extension_requested') && n.relatedType === 'professional_task' && n.relatedId && n.taskStatus === 'deleted') {
+            return (
+              <div
+                key={n.id}
+                style={{
+                  background: '#fff0f0',
+                  padding: 16,
+                  margin: '16px 0',
+                  borderRadius: 8,
+                  boxShadow: '0 1px 4px rgba(0,0,0,0.04)',
+                  color: '#f44336',
+                  fontWeight: 600,
+                }}
+              >
+                Task deleted
+              </div>
+            );
+          }
+          return (
+            <div
+              key={n.id}
+              style={{
+                background: n.isRead ? "#f9f9f9" : "#f0f6ff",
+                padding: 16,
+                margin: "16px 0",
+                borderRadius: 8,
+                boxShadow: "0 1px 4px rgba(0,0,0,0.04)",
+                cursor: "pointer",
+              }}
+              onClick={() => markAsRead(n.id)}
+            >
+              <div style={{ fontWeight: 600 }}>{n.title}</div>
+              <div>{n.message}</div>
+              <div style={{ fontSize: 12, color: "#888" }}>{new Date(n.createdAt).toLocaleString()}</div>
+              
+              {/* Action buttons based on notification type */}
+              <div style={{ marginTop: 12, display: 'flex', gap: 8 }}>
+                {n.type === 'task_assigned' && n.relatedId && n.relatedType === 'professional_task' && (
+                  n.taskAccepted === true ? (
+                    <span style={{ color: '#4caf50', fontWeight: 600 }}>Task Accepted</span>
+                  ) : n.taskAccepted === false ? (
+                    <span style={{ color: '#f44336', fontWeight: 600 }}>Task Rejected</span>
+                  ) : n.taskStatus === 'pending' ? (
+                    <>
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
@@ -238,138 +231,136 @@ const NotificationsPage = () => {
                       >
                         Reject Task
                       </button>
-                    </>;
-                  } else {
-                    return null;
-                  }
-                })()
-              )}
+                    </>
+                  ) : null
+                )}
 
-              {n.type === 'leader_invitation' && n.relatedId && (
-                <>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleAcceptLeader(n.relatedId);
-                    }}
-                    style={{
-                      background: "#4caf50",
-                      color: "#fff",
-                      border: "none",
-                      borderRadius: 6,
-                      padding: "8px 20px",
-                      fontWeight: 600,
-                      fontSize: 15,
-                      cursor: "pointer"
-                    }}
-                  >
-                    Accept Invitation
-                  </button>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleRejectLeader(n.relatedId);
-                    }}
-                    style={{
-                      background: "#f44336",
-                      color: "#fff",
-                      border: "none",
-                      borderRadius: 6,
-                      padding: "8px 20px",
-                      fontWeight: 600,
-                      fontSize: 15,
-                      cursor: "pointer"
-                    }}
-                  >
-                    Reject Invitation
-                  </button>
-                </>
-              )}
+                {n.type === 'leader_invitation' && n.relatedId && (
+                  <>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleAcceptLeader(n.relatedId);
+                      }}
+                      style={{
+                        background: "#4caf50",
+                        color: "#fff",
+                        border: "none",
+                        borderRadius: 6,
+                        padding: "8px 20px",
+                        fontWeight: 600,
+                        fontSize: 15,
+                        cursor: "pointer"
+                      }}
+                    >
+                      Accept Invitation
+                    </button>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleRejectLeader(n.relatedId);
+                      }}
+                      style={{
+                        background: "#f44336",
+                        color: "#fff",
+                        border: "none",
+                        borderRadius: 6,
+                        padding: "8px 20px",
+                        fontWeight: 600,
+                        fontSize: 15,
+                        cursor: "pointer"
+                      }}
+                    >
+                      Reject Invitation
+                    </button>
+                  </>
+                )}
 
-              {n.type === 'task_assigned' && n.relatedId && n.link && (
-                n.relatedType === 'professional_task' ? (
-                  <button
-                    onClick={() => handleViewTask(n.relatedId, 'professional')}
-                    style={{
-                      background: "#1976d2",
-                      color: "#fff",
-                      border: "none",
-                      borderRadius: 6,
-                      padding: "8px 20px",
-                      fontWeight: 600,
-                      fontSize: 15,
-                      cursor: "pointer"
-                    }}
-                  >
-                    View Task
-                  </button>
-                ) : (
-                  <Link
-                    to={n.link}
-                    style={{
-                      background: "#1976d2",
-                      color: "#fff",
-                      border: "none",
-                      borderRadius: 6,
-                      padding: "8px 20px",
-                      fontWeight: 600,
-                      fontSize: 15,
-                      cursor: "pointer",
-                      textDecoration: "none"
-                    }}
-                    onClick={e => e.stopPropagation()}
-                  >
-                    View Task
-                  </Link>
-                )
-              )}
+                {n.type === 'task_assigned' && n.relatedId && n.link && (
+                  n.relatedType === 'professional_task' ? (
+                    <button
+                      onClick={() => handleViewTask(n.relatedId, 'professional')}
+                      style={{
+                        background: "#1976d2",
+                        color: "#fff",
+                        border: "none",
+                        borderRadius: 6,
+                        padding: "8px 20px",
+                        fontWeight: 600,
+                        fontSize: 15,
+                        cursor: "pointer"
+                      }}
+                    >
+                      View Task
+                    </button>
+                  ) : (
+                    <Link
+                      to={n.link}
+                      style={{
+                        background: "#1976d2",
+                        color: "#fff",
+                        border: "none",
+                        borderRadius: 6,
+                        padding: "8px 20px",
+                        fontWeight: 600,
+                        fontSize: 15,
+                        cursor: "pointer",
+                        textDecoration: "none"
+                      }}
+                      onClick={e => e.stopPropagation()}
+                    >
+                      View Task
+                    </Link>
+                  )
+                )}
 
-              {n.type === 'extension_requested' && n.relatedId && (
-                (() => {
-                  const days = n.data?.extensionRequestDays;
-                  const reason = n.data?.extensionRequestReason;
-                  const extStatus = extensionStatuses[n.relatedId];
-                  return (
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', margin: '8px 0', fontSize: 14 }}>
-                      <div style={{ flex: 1 }}>
-                        <div><b>Days requested:</b> {days || '?'}</div>
-                        <div><b>Reason:</b> {reason || 'N/A'}</div>
+                {n.type === 'extension_requested' && n.relatedId && (
+                  (() => {
+                    const days = n.data?.extensionRequestDays;
+                    const reason = n.data?.extensionRequestReason;
+                    const extStatus = extensionStatuses[n.relatedId];
+                    return (
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', margin: '8px 0', fontSize: 14 }}>
+                        <div style={{ flex: 1 }}>
+                          <div><b>Days requested:</b> {days || '?'}</div>
+                          <div><b>Reason:</b> {reason || 'N/A'}</div>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'flex-start', minWidth: 180, justifyContent: 'flex-end' }}>
+                          {extStatus === 'requested' ? (
+                            <>
+                              <button
+                                onClick={(e) => { e.stopPropagation(); handleApproveExtension(n.relatedId); }}
+                                disabled={extensionLoading[n.relatedId] === 'approving'}
+                                style={{
+                                  background: '#4caf50', color: '#fff', border: 'none', borderRadius: 6, padding: '4px 12px', fontWeight: 600, fontSize: 13, cursor: extensionLoading[n.relatedId] ? 'not-allowed' : 'pointer', opacity: extensionLoading[n.relatedId] ? 0.7 : 1, minWidth: 0, width: 'auto', marginRight: 8
+                                }}
+                              >
+                                {extensionLoading[n.relatedId] === 'approving' ? 'Approving...' : 'Approve Extension'}
+                              </button>
+                              <button
+                                onClick={(e) => { e.stopPropagation(); handleRejectExtension(n.relatedId); }}
+                                disabled={extensionLoading[n.relatedId] === 'rejecting'}
+                                style={{
+                                  background: '#f44336', color: '#fff', border: 'none', borderRadius: 6, padding: '4px 12px', fontWeight: 600, fontSize: 13, cursor: extensionLoading[n.relatedId] ? 'not-allowed' : 'pointer', opacity: extensionLoading[n.relatedId] ? 0.7 : 1, minWidth: 0, width: 'auto'
+                                }}
+                              >
+                                {extensionLoading[n.relatedId] === 'rejecting' ? 'Rejecting...' : 'Reject Extension'}
+                              </button>
+                            </>
+                          ) : extStatus === 'approved' ? (
+                            <span style={{ color: '#4caf50', fontWeight: 600, fontSize: 14 }}>Extension Approved</span>
+                          ) : extStatus === 'rejected' ? (
+                            <span style={{ color: '#f44336', fontWeight: 600, fontSize: 14 }}>Extension Rejected</span>
+                          ) : null}
+                        </div>
                       </div>
-                      <div style={{ display: 'flex', alignItems: 'flex-start', minWidth: 180, justifyContent: 'flex-end' }}>
-                        {extStatus === 'requested' ? (
-                          <>
-                            <button
-                              onClick={(e) => { e.stopPropagation(); handleApproveExtension(n.relatedId); }}
-                              disabled={extensionLoading[n.relatedId] === 'approving'}
-                              style={{
-                                background: '#4caf50', color: '#fff', border: 'none', borderRadius: 6, padding: '4px 12px', fontWeight: 600, fontSize: 13, cursor: extensionLoading[n.relatedId] ? 'not-allowed' : 'pointer', opacity: extensionLoading[n.relatedId] ? 0.7 : 1, minWidth: 0, width: 'auto', marginRight: 8
-                              }}
-                            >
-                              {extensionLoading[n.relatedId] === 'approving' ? 'Approving...' : 'Approve Extension'}
-                            </button>
-                            <button
-                              onClick={(e) => { e.stopPropagation(); handleRejectExtension(n.relatedId); }}
-                              disabled={extensionLoading[n.relatedId] === 'rejecting'}
-                              style={{
-                                background: '#f44336', color: '#fff', border: 'none', borderRadius: 6, padding: '4px 12px', fontWeight: 600, fontSize: 13, cursor: extensionLoading[n.relatedId] ? 'not-allowed' : 'pointer', opacity: extensionLoading[n.relatedId] ? 0.7 : 1, minWidth: 0, width: 'auto'
-                              }}
-                            >
-                              {extensionLoading[n.relatedId] === 'rejecting' ? 'Rejecting...' : 'Reject Extension'}
-                            </button>
-                          </>
-                        ) : extStatus === 'approved' ? (
-                          <span style={{ color: '#4caf50', fontWeight: 600, fontSize: 14 }}>Extension Approved</span>
-                        ) : extStatus === 'rejected' ? (
-                          <span style={{ color: '#f44336', fontWeight: 600, fontSize: 14 }}>Extension Rejected</span>
-                        ) : null}
-                      </div>
-                    </div>
-                  );
-                })()
-              )}
+                    );
+                  })()
+                )}
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       {/* Reject Task Modal */}

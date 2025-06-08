@@ -9,11 +9,15 @@ const {
   addComment,
   uploadAttachment,
   getTaskStats,
-  getTasksForCalendar
+  getTasksForCalendar,
+  deleteAttachment
 } = require('../controllers/professionalTaskController');
 const { protect } = require('../middleware/authMiddleware');
 
 router.use(protect);
+
+// Register attachment delete route early to avoid conflicts
+router.delete('/attachments/:id', deleteAttachment);
 
 router.route('/')
   .get(getProfessionalTasks)

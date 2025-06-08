@@ -70,6 +70,10 @@ const ProjectMember = sequelize.define('ProjectMember', {
     type: sequelize.Sequelize.INTEGER,
     allowNull: true,
     references: { model: 'Users', key: 'id' }
+  },
+  leaderInvitationToken: {
+    type: sequelize.Sequelize.STRING,
+    allowNull: true
   }
 }, { 
   timestamps: true,

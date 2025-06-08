@@ -125,6 +125,7 @@ const PersonalTasks = () => {
   const [openStatusDropdown, setOpenStatusDropdown] = useState(null)
   const [hoveredStatusDropdown, setHoveredStatusDropdown] = useState(null)
   const [popoverAnchor, setPopoverAnchor] = useState(null)
+  const [deleteConfirm, setDeleteConfirm] = useState({ open: false, taskId: null })
   const statusOptions = [
     { value: 'todo', label: 'To Do' },
     { value: 'in-progress', label: 'In Progress' },
@@ -219,15 +220,21 @@ const PersonalTasks = () => {
     setIsModalOpen(true)
   }
 
-  const handleDeleteTask = async (taskId) => {
+  const handleDeleteTask = (taskId) => {
+    setDeleteConfirm({ open: true, taskId });
+  };
+
+  const confirmDeleteTask = async () => {
     try {
-      await tasksApi.deletePersonalTask(taskId)
-      setTasks(tasks.filter((task) => task.id !== taskId))
-      toast.success("Task deleted successfully")
+      await tasksApi.deletePersonalTask(deleteConfirm.taskId);
+      setTasks(tasks.filter((task) => task.id !== deleteConfirm.taskId));
+      toast.success("Task deleted successfully");
+      setDeleteConfirm({ open: false, taskId: null });
     } catch (err) {
-      toast.error(err.message)
+      toast.error(err.message);
+      setDeleteConfirm({ open: false, taskId: null });
     }
-  }
+  };
 
   const handleSaveTask = async (taskData) => {
     try {
@@ -417,6 +424,24 @@ const PersonalTasks = () => {
       )}
 
       {isModalOpen && <TaskModal task={currentTask} onClose={() => setIsModalOpen(false)} onSave={handleSaveTask} />}
+
+      {deleteConfirm.open && (
+        <div className="modal-overlay">
+          <div className="modal-container">
+            <div className="modal-header">
+              <h3>Delete Task</h3>
+              <button className="close-btn" onClick={() => setDeleteConfirm({ open: false, taskId: null })}>×</button>
+            </div>
+            <div className="modal-form">
+              <p>Are you sure you want to delete this task?</p>
+              <div className="modal-actions">
+                <button className="btn btn-secondary" onClick={() => setDeleteConfirm({ open: false, taskId: null })}>Cancel</button>
+                <button className="btn btn-danger" onClick={confirmDeleteTask}>Delete</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

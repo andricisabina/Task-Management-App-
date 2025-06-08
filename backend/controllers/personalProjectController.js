@@ -87,7 +87,8 @@ exports.updatePersonalProject = asyncHandler(async (req, res, next) => {
   if (req.body.status === 'completed' && prevStatus !== 'completed') {
     try {
       console.log('Attempting to create notification for completed project:', project.id, project.title);
-      await Notification.create({
+      const io = req.app.get('io');
+      const notification = await Notification.create({
         userId: project.userId,
         title: 'Project Completed',
         message: `Your personal project "${project.title}" has been marked as completed.`,
@@ -97,6 +98,7 @@ exports.updatePersonalProject = asyncHandler(async (req, res, next) => {
         link: `/projects/personal/${project.id}`
       });
       console.log('Notification created successfully');
+      io.to(`user_${project.userId}`).emit('notification', notification);
     } catch (err) {
       console.error('Failed to create notification:', err);
     }

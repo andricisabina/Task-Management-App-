@@ -1,8 +1,9 @@
-const { ProfessionalProject, ProfessionalTask, User, Department, ProjectMember, sequelize, Comment, Notification } = require('../models');
+const { ProfessionalProject, ProfessionalTask, User, Department, ProjectMember, sequelize, Comment, Notification, Attachment } = require('../models');
 const asyncHandler = require('../middleware/asyncHandler');
 const ErrorResponse = require('../utils/errorResponse');
 const { Op } = require('sequelize');
 const sendEmail = require('../utils/sendEmail');
+const crypto = require('crypto');
 
 // @desc    Get all professional projects user has access to
 // @route   GET /api/professional-projects
@@ -95,6 +96,15 @@ exports.getProfessionalProject = asyncHandler(async (req, res, next) => {
             model: User,
             as: 'assignedTo',
             attributes: ['id', 'name', 'email']
+          },
+          {
+            model: Attachment,
+            attributes: ['id', 'fileName', 'filePath', 'fileSize', 'fileType', 'description', 'uploadedBy'],
+            include: [{
+              model: User,
+              as: 'uploader',
+              attributes: ['id', 'name']
+            }]
           }
         ]
       }
@@ -164,7 +174,7 @@ exports.createProfessionalProject = asyncHandler(async (req, res, next) => {
         leader = await User.create({ email: dept.leaderEmail, name: dept.leaderEmail.split('@')[0], password: randomPassword }, { transaction });
       }
 
-      // Add to ProjectDepartment with leaderId
+      // Add department to project (ensure link in ProjectDepartments table)
       await project.addDepartment(dept.departmentId, { through: { leaderId: leader.id }, transaction });
 
       // Use findOrCreate to robustly prevent duplicates and set correct role/status
@@ -176,26 +186,33 @@ exports.createProfessionalProject = asyncHandler(async (req, res, next) => {
         },
         defaults: {
           role: 'leader',
-          status: 'invited',
+          status: 'accepted',
           invitedById: creatorId
         },
         transaction
       });
 
-      if (!created && (member.role !== 'leader' || member.status !== 'invited')) {
+      if (!created && (member.role !== 'leader' || member.status !== 'accepted')) {
         await member.update({
           role: 'leader',
-          status: 'invited',
+          status: 'accepted',
           invitedById: creatorId
         }, { transaction });
       }
 
       // Send invitation email (sample)
       try {
+        const acceptUrl = `http://localhost:5173/login`;
         await sendEmail({
           to: leader.email,
           subject: `Invitation to lead department in project: ${title}`,
-          text: `Hello ${leader.name},\n\nYou have been invited to be the leader of the department in the project: ${title}.\nPlease log in to accept the invitation.\n\nThank you!`
+          html: `<p>Hello ${leader.name},</p>
+                 <p>You have been invited to be the leader of the department in the project: <b>${title}</b>.</p>
+                 <p>Please click the button below to log in:</p>
+                 <a href="${acceptUrl}" style="display:inline-block;padding:10px 20px;background:#1890ff;color:#fff;text-decoration:none;border-radius:4px;">Log In</a>
+                 <p>If the button does not work, copy and paste this link into your browser:</p>
+                 <p><a href="${acceptUrl}">${acceptUrl}</a></p>
+                 <p>Thank you!</p>`
         });
       } catch (emailErr) {
         console.error('Failed to send leader invitation email:', emailErr);
@@ -313,7 +330,7 @@ exports.updateProfessionalProject = asyncHandler(async (req, res, next) => {
             },
             defaults: {
               role: 'leader',
-              status: 'invited',
+              status: 'accepted',
               invitedById: userId
             },
             transaction
@@ -548,20 +565,27 @@ exports.getProjectStats = asyncHandler(async (req, res, next) => {
     group: ['status']
   });
   
+  // Debug: log all tasks for this project
+  const debugTasks = await ProfessionalTask.findAll({ where: { projectId: req.params.id } });
+  console.log(`[DEBUG] Tasks for project ${req.params.id}:`, debugTasks.map(t => t.toJSON()));
+  
   // Task counts by assigned user
   const userStats = await ProfessionalTask.findAll({
     where: { projectId: req.params.id },
+    paranoid: false,
     attributes: [
       'assignedToId',
-      [sequelize.fn('COUNT', sequelize.col('id')), 'total'],
-      [sequelize.fn('SUM', sequelize.literal('CASE WHEN status = "completed" THEN 1 ELSE 0 END')), 'completed']
+      [sequelize.fn('COUNT', sequelize.col('ProfessionalTask.id')), 'total'],
+      [sequelize.fn('SUM', sequelize.literal('CASE WHEN status = "completed" THEN 1 ELSE 0 END')), 'completed'],
     ],
-    include: [{
-      model: User,
-      as: 'assignedTo',
-      attributes: ['name']
-    }],
-    group: ['assignedToId']
+    group: ['assignedToId'],
+    include: [
+      {
+        model: User,
+        as: 'assignedTo',
+        attributes: ['id', 'name']
+      }
+    ]
   });
   
   // Overdue tasks
@@ -744,7 +768,7 @@ exports.acceptLeaderInvitation = asyncHandler(async (req, res, next) => {
   await projectMember.update({ status: 'accepted' });
 
   // Create notification for project creator
-  await Notification.create({
+  const notification = await Notification.create({
     userId: project.creatorId,
     title: 'Leader Invitation Accepted',
     message: `${req.user.name} has accepted the leader invitation for project: ${project.title}`,
@@ -753,6 +777,9 @@ exports.acceptLeaderInvitation = asyncHandler(async (req, res, next) => {
     relatedType: 'professional_project',
     link: `/projects/professional/${project.id}`
   });
+
+  const io = req.app.get('io');
+  io.to(`user_${project.creatorId}`).emit('notification', notification.toJSON());
 
   res.status(200).json({
     success: true,
@@ -787,7 +814,7 @@ exports.rejectLeaderInvitation = asyncHandler(async (req, res, next) => {
   await projectMember.update({ status: 'declined' });
 
   // Create notification for project creator
-  await Notification.create({
+  const notification = await Notification.create({
     userId: project.creatorId,
     title: 'Leader Invitation Rejected',
     message: `${req.user.name} has rejected the leader invitation for project: ${project.title}`,
@@ -796,6 +823,9 @@ exports.rejectLeaderInvitation = asyncHandler(async (req, res, next) => {
     relatedType: 'professional_project',
     link: `/projects/professional/${project.id}`
   });
+
+  const io = req.app.get('io');
+  io.to(`user_${project.creatorId}`).emit('notification', notification.toJSON());
 
   res.status(200).json({
     success: true,
@@ -821,4 +851,33 @@ exports.testProjectDepartments = asyncHandler(async (req, res, next) => {
     success: true,
     departments: project ? project.departments : null
   });
+});
+
+// @desc    Accept leader invitation
+// @route   GET /api/professional-projects/accept-leader-invitation
+// @access  Public
+exports.acceptLeaderInvitation = asyncHandler(async (req, res, next) => {
+  const { projectId, departmentId, userId, token } = req.query;
+  if (!projectId || !departmentId || !userId || !token) {
+    return res.status(400).json({ success: false, message: 'Missing parameters.' });
+  }
+
+  const member = await ProjectMember.findOne({
+    where: {
+      userId,
+      projectId,
+      departmentId,
+      role: 'leader',
+      status: 'invited',
+      leaderInvitationToken: token
+    }
+  });
+
+  if (!member) {
+    return res.status(400).json({ success: false, message: 'Invalid or expired invitation link.' });
+  }
+
+  await member.update({ status: 'accepted', leaderInvitationToken: null });
+
+  res.status(200).json({ success: true, message: 'You have successfully accepted the leader invitation. You can now create tasks for your department.' });
 });

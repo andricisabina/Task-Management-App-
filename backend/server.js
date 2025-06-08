@@ -8,6 +8,8 @@ const errorHandler = require('./middleware/errorMiddleware');
 const multer = require('multer');
 const fs = require('fs');
 const cookieParser = require('cookie-parser');
+const http = require('http');
+const { Server } = require('socket.io');
 
 // Load environment variables
 dotenv.config();
@@ -101,24 +103,6 @@ app.post('/api/upload', upload.single('avatar'), (req, res) => {
   }
 });
 
-// Error handling middleware
-app.use((err, req, res, next) => {
-  if (err instanceof multer.MulterError) {
-    if (err.code === 'LIMIT_FILE_SIZE') {
-      return res.status(400).json({
-        success: false,
-        error: 'File size should be less than 5MB'
-      });
-    }
-  }
-  
-  console.error(err);
-  res.status(500).json({
-    success: false,
-    error: err.message || 'Something went wrong'
-  });
-});
-
 // Base route
 app.get('/', (req, res) => {
   res.json({ message: 'Welcome to Task Management System API' });
@@ -126,6 +110,121 @@ app.get('/', (req, res) => {
 
 // Error handler middleware
 app.use(errorHandler);
+
+// --- Socket.IO Setup ---
+const server = http.createServer(app);
+const io = new Server(server, {
+  cors: {
+    origin: 'http://localhost:5173', // Update if your frontend runs elsewhere
+    methods: ['GET', 'POST'],
+    credentials: true
+  },
+  pingTimeout: 60000,
+  pingInterval: 25000,
+  connectTimeout: 45000,
+});
+
+// Store active user rooms
+const activeRooms = new Map();
+
+app.set('io', io);
+
+// Add test endpoint to verify socket connection
+app.post('/api/test-socket', (req, res) => {
+  const { userId, message } = req.body;
+  if (!userId) {
+    return res.status(400).json({ error: 'User ID is required' });
+  }
+
+  const roomName = `user_${userId}`;
+  console.log(`[DEBUG] Sending test message to room ${roomName}:`, message);
+  
+  io.to(roomName).emit('test_message', {
+    message: message || 'Test message from server',
+    timestamp: new Date().toISOString()
+  });
+
+  res.json({ success: true, message: 'Test message sent' });
+});
+
+// Add connection logging
+io.on('connection', (socket) => {
+  console.log('[DEBUG] New socket connection:', socket.id);
+  
+  // Send immediate test message on connection
+  socket.emit('test_message', {
+    message: 'Socket connection established',
+    timestamp: new Date().toISOString()
+  });
+  
+  socket.on('join', (userId) => {
+    try {
+      console.log(`[DEBUG] User ${userId} joining room user_${userId}`);
+      
+      // Leave any existing rooms for this user
+      const existingRoom = activeRooms.get(userId);
+      if (existingRoom) {
+        socket.leave(existingRoom);
+        console.log(`[DEBUG] User ${userId} left existing room ${existingRoom}`);
+      }
+      
+      // Join new room
+      const roomName = `user_${userId}`;
+      socket.join(roomName);
+      activeRooms.set(userId, roomName);
+      
+      console.log(`[DEBUG] User ${userId} joined room ${roomName}`);
+      console.log('[DEBUG] Active rooms:', Array.from(activeRooms.entries()));
+      
+      // Send confirmation to client
+      socket.emit('room_joined', { room: roomName });
+      
+      // Send test message after joining room
+      socket.emit('test_message', {
+        message: `Successfully joined room ${roomName}`,
+        timestamp: new Date().toISOString()
+      });
+    } catch (error) {
+      console.error('[ERROR] Error in join event:', error);
+      socket.emit('error', { message: 'Failed to join room' });
+    }
+  });
+
+  socket.on('disconnect', (reason) => {
+    console.log('[DEBUG] Socket disconnected:', socket.id, 'Reason:', reason);
+    
+    // Clean up rooms
+    for (const [userId, room] of activeRooms.entries()) {
+      if (socket.rooms.has(room)) {
+        activeRooms.delete(userId);
+        console.log(`[DEBUG] Removed room ${room} for user ${userId}`);
+      }
+    }
+  });
+
+  socket.on('error', (error) => {
+    console.error('[ERROR] Socket error:', error);
+  });
+});
+
+// Add error handling for the server
+server.on('error', (error) => {
+  console.error('[ERROR] Server error:', error);
+});
+
+// Add periodic cleanup of stale rooms
+setInterval(() => {
+  const now = Date.now();
+  for (const [userId, room] of activeRooms.entries()) {
+    const sockets = io.sockets.adapter.rooms.get(room);
+    if (!sockets || sockets.size === 0) {
+      activeRooms.delete(userId);
+      console.log(`[DEBUG] Cleaned up stale room ${room} for user ${userId}`);
+    }
+  }
+}, 300000); // Check every 5 minutes
+
+// --- End Socket.IO Setup ---
 
 // Start server
 const PORT = process.env.PORT || 5000;
@@ -142,7 +241,7 @@ const startServer = async () => {
     //   console.log('Database synced');
     // }
     
-    app.listen(PORT, () => {
+    server.listen(PORT, () => {
       console.log(`Server running on port ${PORT}`);
     });
   } catch (error) {

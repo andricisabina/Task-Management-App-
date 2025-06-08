@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { toast } from 'react-toastify';
 
 const api = axios.create({
   baseURL: '/api',
@@ -47,6 +48,7 @@ export const projectsApi = {
   createProfessionalProject: (data) => api.post('/professional-projects', data),
   updateProfessionalProject: (id, data) => api.put(`/professional-projects/${id}`, data),
   deleteProfessionalProject: (id) => api.delete(`/professional-projects/${id}`),
+  getProfessionalProjectStats: (id) => api.get(`/professional-projects/${id}/stats`),
 
   // Add member to professional project
   addProjectMember: (projectId, data) => api.post(`/professional-projects/${projectId}/members`, data),
@@ -97,10 +99,28 @@ export const departmentsApi = {
 api.interceptors.response.use(
   (response) => response.data,
   (error) => {
+    // Suppress 404 errors for getProfessionalTask
+    if (
+      error.response?.status === 404 &&
+      error.config?.url?.match(/^\/professional-tasks\/\d+$/) &&
+      error.config?.method === 'get'
+    ) {
+      // Return a recognizable value for not found, without throwing
+      return Promise.resolve({ notFound: true });
+    }
     if (error.response?.status === 401) {
-      // Handle unauthorized access
-      localStorage.removeItem('token');
-      window.location.href = '/login';
+      const message = error.response?.data?.message || '';
+      // Only redirect to login for authentication errors
+      if (
+        message.toLowerCase().includes('not authorized to access this route') ||
+        message.toLowerCase().includes('token expired')
+      ) {
+        localStorage.removeItem('token');
+        window.location.href = '/login';
+      } else {
+        toast.error(message || 'You are not authorized to perform this action.');
+        return Promise.reject(error);
+      }
     }
     const message = error.response?.data?.message || 'An error occurred';
     throw new Error(message);

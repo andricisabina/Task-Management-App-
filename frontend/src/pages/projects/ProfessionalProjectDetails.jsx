@@ -69,6 +69,9 @@ const ProfessionalProjectDetails = () => {
   const [extensionDays, setExtensionDays] = useState(1)
   const [extensionReason, setExtensionReason] = useState("")
   const [extensionLoading, setExtensionLoading] = useState(false)
+  const [deleteTaskConfirm, setDeleteTaskConfirm] = useState({ open: false, taskId: null })
+  const [deleteProjectConfirm, setDeleteProjectConfirm] = useState(false)
+  const [projectStats, setProjectStats] = useState(null)
 
   const statusOptions = [
     { value: 'todo', label: 'To Do' },
@@ -81,6 +84,7 @@ const ProfessionalProjectDetails = () => {
   useEffect(() => {
     fetchProjectDetails()
     fetchProjectComments()
+    fetchProjectStats()
   }, [projectId])
 
   useEffect(() => {
@@ -124,6 +128,15 @@ const ProfessionalProjectDetails = () => {
     }
   }
 
+  const fetchProjectStats = async () => {
+    try {
+      const response = await projectsApi.getProfessionalProjectStats(projectId);
+      setProjectStats(response.data);
+    } catch (err) {
+      setProjectStats(null);
+    }
+  }
+
   const handleCreateTask = async () => {
     const projectResponse = await projectsApi.getProfessionalProject(projectId);
     const latestProject = {
@@ -146,15 +159,21 @@ const ProfessionalProjectDetails = () => {
     setModalDepartments(project.departments || [])
   }
 
-  const handleDeleteTask = async (taskId) => {
+  const handleDeleteTask = (taskId) => {
+    setDeleteTaskConfirm({ open: true, taskId });
+  };
+
+  const confirmDeleteTask = async () => {
     try {
-      await tasksApi.deleteProfessionalTask(taskId)
-      setTasks(tasks.filter((task) => task.id !== taskId))
-      toast.success("Task deleted successfully")
+      await tasksApi.deleteProfessionalTask(deleteTaskConfirm.taskId);
+      setTasks(tasks.filter((task) => task.id !== deleteTaskConfirm.taskId));
+      toast.success("Task deleted successfully");
+      setDeleteTaskConfirm({ open: false, taskId: null });
     } catch (err) {
-      toast.error(err.message)
+      toast.error(err.message);
+      setDeleteTaskConfirm({ open: false, taskId: null });
     }
-  }
+  };
 
   const handleSaveTask = async (taskData) => {
     try {
@@ -307,6 +326,21 @@ const ProfessionalProjectDetails = () => {
     }
   };
 
+  const handleDeleteProject = () => {
+    setDeleteProjectConfirm(true);
+  };
+
+  const confirmDeleteProject = async () => {
+    try {
+      await projectsApi.deleteProfessionalProject(project.id);
+      toast.success("Project deleted successfully");
+      navigate("/professional-projects");
+    } catch (err) {
+      toast.error(err.message);
+      setDeleteProjectConfirm(false);
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="loading-container">
@@ -366,10 +400,30 @@ const ProfessionalProjectDetails = () => {
 
   function handleAttachFile(taskId, event) {
     const file = event.target.files[0];
-    if (file) {
-      // TODO: Implement file upload logic here
-      toast.info(`File '${file.name}' selected for task ${taskId}`);
-    }
+    if (!file) return;
+
+    const formData = new FormData();
+    formData.append('file', file);
+
+    fetch(`/api/professional-tasks/${taskId}/attachments`, {
+      method: 'POST',
+      body: formData,
+      headers: {
+        'Authorization': `Bearer ${localStorage.getItem('token')}`,
+        // Do NOT set Content-Type, browser will set it automatically
+      },
+    })
+      .then(response => {
+        if (!response.ok) throw new Error('Upload failed');
+        return response.json();
+      })
+      .then(() => {
+        toast.success(`File '${file.name}' uploaded for task ${taskId}`);
+        fetchProjectDetails();
+      })
+      .catch(err => {
+        toast.error('Failed to upload file: ' + err.message);
+      });
   }
 
   const openAddMemberModal = (dept) => {
@@ -386,6 +440,23 @@ const ProfessionalProjectDetails = () => {
     } catch (err) {
       toast.error(err.message);
     }
+  };
+
+  const handleDeleteAttachment = (attachmentId) => {
+    fetch(`/api/professional-tasks/attachments/${attachmentId}`, {
+      method: 'DELETE',
+      headers: {
+        'Authorization': `Bearer ${localStorage.getItem('token')}`,
+      },
+    })
+      .then(response => {
+        if (!response.ok) throw new Error('Delete failed');
+        toast.success('Attachment deleted');
+        fetchProjectDetails();
+      })
+      .catch(err => {
+        toast.error('Failed to delete attachment: ' + err.message);
+      });
   };
 
   return (
@@ -413,6 +484,49 @@ const ProfessionalProjectDetails = () => {
           <div className="project-info-content">
             <h1 className="project-title">{project.title}</h1>
             <p className="project-description">{project.description}</p>
+            <div style={{ marginTop: 8 }}>
+              <span
+                className="project-status-badge"
+                style={{
+                  display: 'inline-block',
+                  padding: '4px 16px',
+                  borderRadius: 16,
+                  fontWeight: 600,
+                  fontSize: '1rem',
+                  background: getStatusColor(project.status),
+                  color: getStatusTextColor(project.status),
+                  border: project.status === 'completed' ? '2px solid #52c41a' : '1px solid #e0e0e0',
+                  marginBottom: 4,
+                }}
+              >
+                {project.status === 'completed' ? 'Project Completed' : project.status.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
+              </span>
+            </div>
+            {projectStats && (() => {
+              const taskStats = projectStats.taskStats || [];
+              const completedTasks = parseInt(taskStats.find(t => t.status === "completed")?.count || 0);
+              const totalTasks = taskStats.reduce((sum, t) => sum + parseInt(t.count), 0);
+              const completionRate = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
+              return (
+                <div className="project-progress" style={{ margin: '12px 0 0 0' }}>
+                  <div className="progress-stats">
+                    <span className="progress-text">Progress</span>
+                    <span className="tasks-count">
+                      {completedTasks}/{totalTasks} tasks completed
+                    </span>
+                  </div>
+                  <div className="progress-bar">
+                    <div className="progress-fill" style={{ width: `${completionRate}%` }}></div>
+                  </div>
+                </div>
+              );
+            })()}
+            {project.status === 'completed' && (
+              <div style={{ color: '#52c41a', fontWeight: 600, marginTop: 4, fontSize: '1.1rem' }}>
+                <CheckCircle style={{ verticalAlign: 'middle', marginRight: 4 }} size={18} />
+                All tasks are completed. Congratulations!
+              </div>
+            )}
           </div>
         </div>
 
@@ -508,6 +622,7 @@ const ProfessionalProjectDetails = () => {
                       (project.creator && project.creator.id === currentUser.id) ||
                       isLeader
                     )
+                    const attachments = task.attachments || task.Attachments || [];
                     return (
                       <div key={task.id} className="task-card card" style={{ position: 'relative', cursor: 'default', marginBottom: 16, borderLeft: `4px solid ${getPriorityBorderColor(task.priority)}` }}>
                         <div className="task-header">
@@ -574,6 +689,33 @@ const ProfessionalProjectDetails = () => {
                           Assigned to: {task.assignedTo?.name || task.assignedTo?.email || 'Unassigned'}
                         </div>
                         <p className="task-description">{task.description}</p>
+                        {attachments.length > 0 && (
+                          <div className="task-attachments" style={{ margin: '12px 0' }}>
+                            <h4 style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 600, fontSize: '1rem' }}>
+                              <span role="img" aria-label="paperclip">📎</span> Attachments
+                            </h4>
+                            <ul className="attachments-list" style={{ listStyle: 'none', padding: 0 }}>
+                              {attachments.map(att => (
+                                <li key={att.id} className="attachment-item" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#f9f9f9', borderRadius: 8, padding: '6px 12px', marginBottom: 6 }}>
+                                  <a
+                                    href={att.filePath.startsWith('uploads/') ? `/${att.filePath}` : att.filePath}
+                                    className="attachment-link"
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    style={{ color: '#1a237e', fontWeight: 500, textDecoration: 'underline' }}
+                                    download={att.fileName}
+                                  >
+                                    {att.fileName}
+                                  </a>
+                                  <span className="attachment-size" style={{ fontSize: '0.8em', color: '#888' }}>{(att.fileSize > 1024*1024 ? (att.fileSize/1024/1024).toFixed(2) + ' MB' : (att.fileSize/1024).toFixed(1) + ' KB')}</span>
+                                  {(currentUser && (att.uploadedBy === currentUser.id || currentUser.role === 'admin')) && (
+                                    <button onClick={() => handleDeleteAttachment(att.id)} style={{ marginLeft: 8, color: 'red', background: 'none', border: 'none', cursor: 'pointer' }}>Delete</button>
+                                  )}
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
                         <div className="task-meta">
                           <span className="priority-badge" style={{ backgroundColor: getPriorityBorderColor(task.priority), color: task.priority.toLowerCase() === 'medium' ? '#222' : '#fff' }}>
                             {task.priority}
@@ -650,6 +792,7 @@ const ProfessionalProjectDetails = () => {
                 (project.creator && project.creator.id === currentUser.id) ||
                 isLeader
               )
+              const attachments = task.attachments || task.Attachments || [];
               return (
                 <div key={task.id} className="task-card card" style={{ 
                   cursor: 'pointer', 
@@ -720,6 +863,33 @@ const ProfessionalProjectDetails = () => {
                     Assigned to: {task.assignedTo?.name || task.assignedTo?.email || 'Unassigned'}
                   </div>
                   <p className="task-description">{task.description}</p>
+                  {attachments.length > 0 && (
+                    <div className="task-attachments" style={{ margin: '12px 0' }}>
+                      <h4 style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 600, fontSize: '1rem' }}>
+                        <span role="img" aria-label="paperclip">📎</span> Attachments
+                      </h4>
+                      <ul className="attachments-list" style={{ listStyle: 'none', padding: 0 }}>
+                        {attachments.map(att => (
+                          <li key={att.id} className="attachment-item" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#f9f9f9', borderRadius: 8, padding: '6px 12px', marginBottom: 6 }}>
+                            <a
+                              href={att.filePath.startsWith('uploads/') ? `/${att.filePath}` : att.filePath}
+                              className="attachment-link"
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              style={{ color: '#1a237e', fontWeight: 500, textDecoration: 'underline' }}
+                              download={att.fileName}
+                            >
+                              {att.fileName}
+                            </a>
+                            <span className="attachment-size" style={{ fontSize: '0.8em', color: '#888' }}>{(att.fileSize > 1024*1024 ? (att.fileSize/1024/1024).toFixed(2) + ' MB' : (att.fileSize/1024).toFixed(1) + ' KB')}</span>
+                            {(currentUser && (att.uploadedBy === currentUser.id || currentUser.role === 'admin')) && (
+                              <button onClick={() => handleDeleteAttachment(att.id)} style={{ marginLeft: 8, color: 'red', background: 'none', border: 'none', cursor: 'pointer' }}>Delete</button>
+                            )}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
                   <div className="task-meta">
                     <span className="priority-badge" style={{ backgroundColor: getPriorityBorderColor(task.priority), color: task.priority.toLowerCase() === 'medium' ? '#222' : '#fff' }}>
                       {task.priority}
@@ -1109,6 +1279,57 @@ const ProfessionalProjectDetails = () => {
                 >
                   Submit Request
                 </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+      {deleteConfirm.open && (
+        <div className="modal-overlay">
+          <div className="modal-container">
+            <div className="modal-header">
+              <h3>Delete Comment</h3>
+              <button className="close-btn" onClick={() => setDeleteConfirm({ open: false, comment: null })}><X size={20} /></button>
+            </div>
+            <div className="modal-form">
+              <p>Are you sure you want to delete this comment?</p>
+              <div className="modal-actions">
+                <button className="btn btn-secondary" onClick={() => setDeleteConfirm({ open: false, comment: null })}>Cancel</button>
+                <button className="btn btn-danger" onClick={confirmDeleteComment}>Delete</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+      {deleteTaskConfirm.open && (
+        <div className="modal-overlay">
+          <div className="modal-container">
+            <div className="modal-header">
+              <h3>Delete Task</h3>
+              <button className="close-btn" onClick={() => setDeleteTaskConfirm({ open: false, taskId: null })}><X size={20} /></button>
+            </div>
+            <div className="modal-form">
+              <p>Are you sure you want to delete this task?</p>
+              <div className="modal-actions">
+                <button className="btn btn-secondary" onClick={() => setDeleteTaskConfirm({ open: false, taskId: null })}>Cancel</button>
+                <button className="btn btn-danger" onClick={confirmDeleteTask}>Delete</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+      {deleteProjectConfirm && (
+        <div className="modal-overlay">
+          <div className="modal-container">
+            <div className="modal-header">
+              <h3>Delete Project</h3>
+              <button className="close-btn" onClick={() => setDeleteProjectConfirm(false)}><X size={20} /></button>
+            </div>
+            <div className="modal-form">
+              <p>Are you sure you want to delete this project? This action cannot be undone.</p>
+              <div className="modal-actions">
+                <button className="btn btn-secondary" onClick={() => setDeleteProjectConfirm(false)}>Cancel</button>
+                <button className="btn btn-danger" onClick={confirmDeleteProject}>Delete</button>
               </div>
             </div>
           </div>
