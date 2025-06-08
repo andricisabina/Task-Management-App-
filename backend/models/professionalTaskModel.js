@@ -16,7 +16,7 @@ const ProfessionalTask = sequelize.define('ProfessionalTask', {
     allowNull: true
   },
   status: {
-    type: DataTypes.ENUM('pending', 'in-progress', 'review', 'completed', 'rejected', 'deadline-extension-requested'),
+    type: DataTypes.ENUM('pending', 'todo', 'in-progress', 'review', 'completed', 'rejected', 'on-hold', 'cancelled', 'deadline-extension-requested'),
     defaultValue: 'pending'
   },
   dueDate: {

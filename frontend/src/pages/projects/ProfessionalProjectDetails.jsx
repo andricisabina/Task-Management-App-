@@ -64,6 +64,11 @@ const ProfessionalProjectDetails = () => {
   const [addMemberDept, setAddMemberDept] = useState(null)
   const [isEditModalOpen, setIsEditModalOpen] = useState(false)
   const [editProjectData, setEditProjectData] = useState(null)
+  const [showExtensionModal, setShowExtensionModal] = useState(false)
+  const [extensionTaskId, setExtensionTaskId] = useState(null)
+  const [extensionDays, setExtensionDays] = useState(1)
+  const [extensionReason, setExtensionReason] = useState("")
+  const [extensionLoading, setExtensionLoading] = useState(false)
 
   const statusOptions = [
     { value: 'todo', label: 'To Do' },
@@ -513,11 +518,11 @@ const ProfessionalProjectDetails = () => {
                               onMouseEnter={() => setHoveredStatusDropdown(task.id)}
                               onMouseLeave={() => { setHoveredStatusDropdown(null); setOpenStatusDropdown(null); }}
                             >
-                              {canUpdateStatus && task.assignedToId && (
+                              {canUpdateStatus && task.assignedToId && task.status !== 'pending' && (
                                 <span
                                   className={`task-status-bar status-${task.status.replace('in-progress', 'inprogress').replace('completed', 'done')}`}
                                   style={{
-                                    fontSize: '1.05rem',
+                                    fontSize: task.status === 'deadline-extension-requested' ? '0.85rem' : '1.05rem',
                                     padding: '8px 24px',
                                     borderRadius: 12,
                                     fontWeight: 600,
@@ -541,7 +546,13 @@ const ProfessionalProjectDetails = () => {
                                   onMouseEnter={e => e.target.style.background = '#f5f7fa'}
                                   onMouseLeave={e => e.target.style.background = openStatusDropdown === task.id ? '#f0f4ff' : '#fff'}
                                 >
-                                  {task.status === 'todo' ? 'To Do' : task.status === 'in-progress' ? 'In Progress' : task.status === 'completed' ? 'Completed' : task.status === 'on-hold' ? 'On Hold' : task.status === 'cancelled' ? 'Cancelled' : task.status.replace(/\b\w/g, l => l.toUpperCase())}
+                                  {task.status === 'todo' ? 'To Do' :
+                                    task.status === 'in-progress' ? 'In Progress' :
+                                    task.status === 'completed' ? 'Completed' :
+                                    task.status === 'on-hold' ? 'On Hold' :
+                                    task.status === 'cancelled' ? 'Cancelled' :
+                                    task.status === 'deadline-extension-requested' ? 'Deadline Extension' :
+                                    task.status.replace(/\b\w/g, l => l.toUpperCase())}
                                 </span>
                               )}
                               {openStatusDropdown === task.id && (
@@ -569,7 +580,7 @@ const ProfessionalProjectDetails = () => {
                           </span>
                           {task.dueDate && (
                             <span className="due-date">
-                              Due: {formatDate(task.dueDate)}
+                              Due: {`${formatDate(task.dueDate)} ${formatTime(task.dueDate)}`}
                             </span>
                           )}
                         </div>
@@ -605,6 +616,14 @@ const ProfessionalProjectDetails = () => {
                           >
                             Delete
                           </button>
+                          {currentUser && task.assignedToId === currentUser.id && !['completed','cancelled'].includes(task.status) && (
+                            <button
+                              className="action-btn btn-warning"
+                              onClick={() => { setExtensionTaskId(task.id); setShowExtensionModal(true); }}
+                            >
+                              Request Deadline Extension
+                            </button>
+                          )}
                         </div>
                       </div>
                     )
@@ -645,11 +664,11 @@ const ProfessionalProjectDetails = () => {
                         onMouseEnter={() => setHoveredStatusDropdown(task.id)}
                         onMouseLeave={() => { setHoveredStatusDropdown(null); setOpenStatusDropdown(null); }}
                       >
-                        {canUpdateStatus && task.assignedToId && (
+                        {canUpdateStatus && task.assignedToId && task.status !== 'pending' && (
                           <span
                             className={`task-status-bar status-${task.status.replace('in-progress', 'inprogress').replace('completed', 'done')}`}
                             style={{
-                              fontSize: '1.05rem',
+                              fontSize: task.status === 'deadline-extension-requested' ? '0.85rem' : '1.05rem',
                               padding: '8px 24px',
                               borderRadius: 12,
                               fontWeight: 600,
@@ -673,7 +692,13 @@ const ProfessionalProjectDetails = () => {
                             onMouseEnter={e => e.target.style.background = '#f5f7fa'}
                             onMouseLeave={e => e.target.style.background = openStatusDropdown === task.id ? '#f0f4ff' : '#fff'}
                           >
-                            {task.status === 'todo' ? 'To Do' : task.status === 'in-progress' ? 'In Progress' : task.status === 'completed' ? 'Completed' : task.status === 'on-hold' ? 'On Hold' : task.status === 'cancelled' ? 'Cancelled' : task.status.replace(/\b\w/g, l => l.toUpperCase())}
+                            {task.status === 'todo' ? 'To Do' :
+                              task.status === 'in-progress' ? 'In Progress' :
+                              task.status === 'completed' ? 'Completed' :
+                              task.status === 'on-hold' ? 'On Hold' :
+                              task.status === 'cancelled' ? 'Cancelled' :
+                              task.status === 'deadline-extension-requested' ? 'Deadline Extension' :
+                              task.status.replace(/\b\w/g, l => l.toUpperCase())}
                           </span>
                         )}
                         {openStatusDropdown === task.id && (
@@ -701,7 +726,7 @@ const ProfessionalProjectDetails = () => {
                     </span>
                     {task.dueDate && (
                       <span className="due-date">
-                        Due: {formatDate(task.dueDate)}
+                        Due: {`${formatDate(task.dueDate)} ${formatTime(task.dueDate)}`}
                       </span>
                     )}
                   </div>
@@ -737,6 +762,14 @@ const ProfessionalProjectDetails = () => {
                     >
                       Delete
                     </button>
+                    {currentUser && task.assignedToId === currentUser.id && !['completed','cancelled'].includes(task.status) && (
+                      <button
+                        className="action-btn btn-warning"
+                        onClick={() => { setExtensionTaskId(task.id); setShowExtensionModal(true); }}
+                      >
+                        Request Deadline Extension
+                      </button>
+                    )}
                   </div>
                 </div>
               )
@@ -1018,31 +1051,108 @@ const ProfessionalProjectDetails = () => {
           onSave={handleSaveEditProject}
         />
       )}
+      {showExtensionModal && (
+        <div className="modal-overlay">
+          <div className="modal-container">
+            <div className="modal-header">
+              <h3>Request Deadline Extension</h3>
+              <button className="close-btn" onClick={() => setShowExtensionModal(false)}><X size={20} /></button>
+            </div>
+            <div className="modal-form">
+              <label htmlFor="extensionDays">Number of days (1-7):</label>
+              <input
+                id="extensionDays"
+                type="number"
+                min={1}
+                max={7}
+                value={extensionDays}
+                onChange={e => setExtensionDays(Number(e.target.value))}
+                className="form-input"
+              />
+              <label htmlFor="extensionReason">Reason:</label>
+              <textarea
+                id="extensionReason"
+                className="form-input"
+                value={extensionReason}
+                onChange={e => setExtensionReason(e.target.value)}
+                rows={3}
+                required
+              />
+              <div className="modal-actions">
+                <button className="btn btn-secondary" onClick={() => setShowExtensionModal(false)}>Cancel</button>
+                <button
+                  className="btn btn-warning"
+                  disabled={extensionLoading}
+                  onClick={async () => {
+                    if (!extensionReason.trim()) {
+                      toast.error("Please provide a reason for the extension.");
+                      return;
+                    }
+                    setExtensionLoading(true);
+                    try {
+                      await tasksApi.requestDeadlineExtension(extensionTaskId, {
+                        extensionRequestDays: extensionDays,
+                        extensionRequestReason: extensionReason
+                      });
+                      toast.success("Extension request submitted.");
+                      setShowExtensionModal(false);
+                      setExtensionTaskId(null);
+                      setExtensionDays(1);
+                      setExtensionReason("");
+                      await fetchProjectDetails();
+                    } catch (err) {
+                      toast.error(err.message);
+                    } finally {
+                      setExtensionLoading(false);
+                    }
+                  }}
+                >
+                  Submit Request
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
 
 function getStatusColor(status) {
+  if (!status) return "#f0f0f0";
   switch (status.toLowerCase()) {
     case "todo":
       return "#f0f0f0"
     case "in_progress":
+    case "in-progress":
       return "#e6f7ff"
     case "completed":
       return "#f6ffed"
+    case "on-hold":
+    case "on_hold":
+      return "#fff0f6"
+    case "cancelled":
+      return "#f5f5f5"
     default:
       return "#f0f0f0"
   }
 }
 
 function getStatusTextColor(status) {
+  if (!status) return "#595959";
   switch (status.toLowerCase()) {
     case "todo":
       return "#595959"
     case "in_progress":
+    case "in-progress":
       return "#1890ff"
     case "completed":
       return "#52c41a"
+    case "on-hold":
+    case "on_hold":
+      return "#c41d7f"
+    case "cancelled":
+      return "#888"
     default:
       return "#595959"
   }

@@ -17,6 +17,8 @@ const NotificationsPage = () => {
   const [modalOpen, setModalOpen] = useState(false);
   const [modalLoading, setModalLoading] = useState(false);
   const [taskStatuses, setTaskStatuses] = useState({}); // { [taskId]: status }
+  const [extensionLoading, setExtensionLoading] = useState({}); // { [taskId]: 'approving' | 'rejecting' }
+  const [extensionStatuses, setExtensionStatuses] = useState({}); // { [taskId]: extensionStatus }
   const fetchedTaskIds = useRef(new Set());
 
   const handleAcceptTask = async (taskId) => {
@@ -108,18 +110,44 @@ const NotificationsPage = () => {
     }
   };
 
+  const handleApproveExtension = async (taskId) => {
+    setExtensionLoading((prev) => ({ ...prev, [taskId]: 'approving' }));
+    try {
+      await tasksApi.approveDeadlineExtension(taskId);
+      await fetchNotifications();
+      toast.success('Extension approved');
+    } catch (error) {
+      toast.error(error.message || 'Failed to approve extension');
+    } finally {
+      setExtensionLoading((prev) => ({ ...prev, [taskId]: undefined }));
+    }
+  };
+
+  const handleRejectExtension = async (taskId) => {
+    setExtensionLoading((prev) => ({ ...prev, [taskId]: 'rejecting' }));
+    try {
+      await tasksApi.rejectDeadlineExtension(taskId);
+      await fetchNotifications();
+      toast.success('Extension rejected');
+    } catch (error) {
+      toast.error(error.message || 'Failed to reject extension');
+    } finally {
+      setExtensionLoading((prev) => ({ ...prev, [taskId]: undefined }));
+    }
+  };
+
   useEffect(() => {
-    // Fetch statuses for all professional task_assigned notifications
+    // Fetch statuses for all professional task_assigned and extension_requested notifications
     const fetchStatuses = async () => {
       const promises = notifications
-        .filter((n) => n.type === 'task_assigned' && n.relatedType === 'professional_task' && n.relatedId && !fetchedTaskIds.current.has(n.relatedId))
+        .filter((n) => (n.type === 'task_assigned' || n.type === 'extension_requested') && n.relatedType === 'professional_task' && n.relatedId && !fetchedTaskIds.current.has(n.relatedId))
         .map(async (n) => {
           try {
             const response = await tasksApi.getProfessionalTask(n.relatedId);
             fetchedTaskIds.current.add(n.relatedId);
-            return { taskId: n.relatedId, status: response.data.status };
+            return { taskId: n.relatedId, status: response.data.status, extensionStatus: response.data.extensionStatus };
           } catch {
-            return { taskId: n.relatedId, status: null };
+            return { taskId: n.relatedId, status: null, extensionStatus: null };
           }
         });
       const results = await Promise.all(promises);
@@ -127,6 +155,13 @@ const NotificationsPage = () => {
         const updated = { ...prev };
         results.forEach(({ taskId, status }) => {
           if (taskId) updated[taskId] = status;
+        });
+        return updated;
+      });
+      setExtensionStatuses((prev) => {
+        const updated = { ...prev };
+        results.forEach(({ taskId, extensionStatus }) => {
+          if (taskId) updated[taskId] = extensionStatus;
         });
         return updated;
       });
@@ -287,6 +322,50 @@ const NotificationsPage = () => {
                     View Task
                   </Link>
                 )
+              )}
+
+              {n.type === 'extension_requested' && n.relatedId && (
+                (() => {
+                  const days = n.data?.extensionRequestDays;
+                  const reason = n.data?.extensionRequestReason;
+                  const extStatus = extensionStatuses[n.relatedId];
+                  return (
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', margin: '8px 0', fontSize: 14 }}>
+                      <div style={{ flex: 1 }}>
+                        <div><b>Days requested:</b> {days || '?'}</div>
+                        <div><b>Reason:</b> {reason || 'N/A'}</div>
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'flex-start', minWidth: 180, justifyContent: 'flex-end' }}>
+                        {extStatus === 'requested' ? (
+                          <>
+                            <button
+                              onClick={(e) => { e.stopPropagation(); handleApproveExtension(n.relatedId); }}
+                              disabled={extensionLoading[n.relatedId] === 'approving'}
+                              style={{
+                                background: '#4caf50', color: '#fff', border: 'none', borderRadius: 6, padding: '4px 12px', fontWeight: 600, fontSize: 13, cursor: extensionLoading[n.relatedId] ? 'not-allowed' : 'pointer', opacity: extensionLoading[n.relatedId] ? 0.7 : 1, minWidth: 0, width: 'auto', marginRight: 8
+                              }}
+                            >
+                              {extensionLoading[n.relatedId] === 'approving' ? 'Approving...' : 'Approve Extension'}
+                            </button>
+                            <button
+                              onClick={(e) => { e.stopPropagation(); handleRejectExtension(n.relatedId); }}
+                              disabled={extensionLoading[n.relatedId] === 'rejecting'}
+                              style={{
+                                background: '#f44336', color: '#fff', border: 'none', borderRadius: 6, padding: '4px 12px', fontWeight: 600, fontSize: 13, cursor: extensionLoading[n.relatedId] ? 'not-allowed' : 'pointer', opacity: extensionLoading[n.relatedId] ? 0.7 : 1, minWidth: 0, width: 'auto'
+                              }}
+                            >
+                              {extensionLoading[n.relatedId] === 'rejecting' ? 'Rejecting...' : 'Reject Extension'}
+                            </button>
+                          </>
+                        ) : extStatus === 'approved' ? (
+                          <span style={{ color: '#4caf50', fontWeight: 600, fontSize: 14 }}>Extension Approved</span>
+                        ) : extStatus === 'rejected' ? (
+                          <span style={{ color: '#f44336', fontWeight: 600, fontSize: 14 }}>Extension Rejected</span>
+                        ) : null}
+                      </div>
+                    </div>
+                  );
+                })()
               )}
             </div>
           </div>

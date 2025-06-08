@@ -75,6 +75,9 @@ export const tasksApi = {
   deleteProfessionalTask: (id) => api.delete(`/professional-tasks/${id}`),
   acceptProfessionalTask: (id) => api.post(`/professional-tasks/${id}/accept`),
   rejectProfessionalTask: (id, data) => api.post(`/professional-tasks/${id}/reject`, data),
+  requestDeadlineExtension: (id, data) => api.post(`/professional-tasks/${id}/request-extension`, data),
+  approveDeadlineExtension: (id) => api.post(`/professional-tasks/${id}/approve-extension`),
+  rejectDeadlineExtension: (id) => api.post(`/professional-tasks/${id}/reject-extension`),
 };
 
 // Dashboard API

@@ -348,6 +348,8 @@ exports.updateProfessionalTask = asyncHandler(async (req, res, next) => {
       }
       req.body.extensionStatus = 'requested';
     }
+    // Allow transitions to 'todo', 'on-hold', and 'cancelled' without special logic
+    // No extra checks needed for these statuses
     // Handle extension responses
     if (req.body.extensionStatus && (req.body.extensionStatus === 'approved' || req.body.extensionStatus === 'rejected')) {
       // Only assigner or project creator can approve/reject extensions
@@ -955,7 +957,11 @@ exports.requestDeadlineExtension = asyncHandler(async (req, res, next) => {
     type: 'extension_requested',
     relatedId: task.id,
     relatedType: 'professional_task',
-    link: `/tasks/professional/${task.id}`
+    link: `/tasks/professional/${task.id}`,
+    data: {
+      extensionRequestDays: req.body.extensionRequestDays,
+      extensionRequestReason: req.body.extensionRequestReason
+    }
   });
   if (manager && (!assigner || manager.id !== assigner.id)) notifications.push({
     userId: manager.id,
@@ -964,7 +970,11 @@ exports.requestDeadlineExtension = asyncHandler(async (req, res, next) => {
     type: 'extension_requested',
     relatedId: task.id,
     relatedType: 'professional_task',
-    link: `/tasks/professional/${task.id}`
+    link: `/tasks/professional/${task.id}`,
+    data: {
+      extensionRequestDays: req.body.extensionRequestDays,
+      extensionRequestReason: req.body.extensionRequestReason
+    }
   });
   await Notification.bulkCreate(notifications);
   // Send emails

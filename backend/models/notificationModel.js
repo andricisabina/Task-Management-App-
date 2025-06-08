@@ -40,6 +40,11 @@ const Notification = sequelize.define('Notification', {
     type: DataTypes.STRING,
     allowNull: true,
     comment: 'Frontend link to navigate to related entity'
+  },
+  data: {
+    type: DataTypes.JSON,
+    allowNull: true,
+    comment: 'Extra data for notification (e.g., extension days/reason)'
   }
 });
 
