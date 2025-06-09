@@ -108,6 +108,15 @@ api.interceptors.response.use(
       // Return a recognizable value for not found, without throwing
       return Promise.resolve({ notFound: true });
     }
+    // Custom handling for permission errors on professional project deletion
+    if (
+      error.config?.url?.includes('/professional-projects/') &&
+      error.config?.method === 'delete' &&
+      error.response?.data?.message &&
+      error.response.data.message.toLowerCase().includes('permission')
+    ) {
+      throw new Error('You have no permissions');
+    }
     if (error.response?.status === 401) {
       const message = error.response?.data?.message || '';
       // Only redirect to login for authentication errors
@@ -122,7 +131,7 @@ api.interceptors.response.use(
         return Promise.reject(error);
       }
     }
-    const message = error.response?.data?.message || 'An error occurred';
+    const message = error.response?.data?.message || error.response?.data?.error || 'An error occurred';
     throw new Error(message);
   }
 );

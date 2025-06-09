@@ -407,7 +407,7 @@ exports.deleteProfessionalProject = asyncHandler(async (req, res, next) => {
   
   // Check if user is creator or admin
   if (project.creatorId !== req.user.id && req.user.role !== 'admin') {
-    return next(new ErrorResponse(`User not authorized to delete this project`, 401));
+    return next(new ErrorResponse(`You don't have permission to delete this project. Only project managers can delete projects.`, 401));
   }
   
   const transaction = await sequelize.transaction();

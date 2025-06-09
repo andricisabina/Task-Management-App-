@@ -78,11 +78,11 @@ const ProfessionalProjects = () => {
 
   const handleDeleteProject = async (projectId) => {
     try {
-      await projectsApi.deleteProfessionalProject(projectId)
-      setProjects(projects.filter((project) => project.id !== projectId))
-      toast.success("Project deleted successfully")
+      await projectsApi.deleteProfessionalProject(projectId);
+      setProjects(projects.filter((project) => project.id !== projectId));
+      toast.success("Project deleted successfully");
     } catch (err) {
-      toast.error(err.message)
+      toast.error("An error occurred");
     }
   }
 
