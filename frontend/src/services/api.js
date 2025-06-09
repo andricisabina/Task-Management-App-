@@ -97,12 +97,18 @@ export const departmentsApi = {
 
 // Error interceptor
 api.interceptors.response.use(
-  (response) => response.data,
+  (response) => {
+    // If the responseType is 'blob', return the raw response
+    if (response.config && response.config.responseType === 'blob') {
+      return response.data;
+    }
+    return response.data;
+  },
   (error) => {
     // Suppress 404 errors for getProfessionalTask
     if (
       error.response?.status === 404 &&
-      error.config?.url?.match(/^\/professional-tasks\/\d+$/) &&
+      error.config?.url?.match(/^\/professional-tasks\/cd+$/) &&
       error.config?.method === 'get'
     ) {
       // Return a recognizable value for not found, without throwing

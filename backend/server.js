@@ -74,6 +74,8 @@ app.use('/api/comments', require('./routes/commentRoutes'));
 app.use('/api/notifications', require('./routes/notificationRoutes'));
 app.use('/api/calendar', require('./routes/calendarRoutes'));
 app.use('/api/dashboard', require('./routes/dashboardRoutes'));
+app.use('/api/reports', require('./routes/reportRoutes'));
+app.use('/api/projects', require('./routes/projectRoutes'));
 
 // File upload endpoint
 app.post('/api/upload', upload.single('avatar'), (req, res) => {
