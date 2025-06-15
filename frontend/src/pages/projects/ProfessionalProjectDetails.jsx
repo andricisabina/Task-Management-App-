@@ -484,51 +484,28 @@ const ProfessionalProjectDetails = () => {
           <div className="project-info-content">
             <h1 className="project-title">{project.title}</h1>
             <p className="project-description">{project.description}</p>
-            <div style={{ marginTop: 8 }}>
-              <span
-                className="project-status-badge"
-                style={{
-                  display: 'inline-block',
-                  padding: '4px 16px',
-                  borderRadius: 16,
-                  fontWeight: 600,
-                  fontSize: '1rem',
-                  background: getStatusColor(project.status),
-                  color: getStatusTextColor(project.status),
-                  border: project.status === 'completed' ? '2px solid #52c41a' : '1px solid #e0e0e0',
-                  marginBottom: 4,
-                }}
-              >
-                {project.status === 'completed' ? 'Project Completed' : project.status.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
-              </span>
-            </div>
-            {projectStats && (() => {
-              const taskStats = projectStats.taskStats || [];
-              const completedTasks = parseInt(taskStats.find(t => t.status === "completed")?.count || 0);
-              const totalTasks = taskStats.reduce((sum, t) => sum + parseInt(t.count), 0);
-              const completionRate = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
-              return (
-                <div className="project-progress" style={{ margin: '12px 0 0 0' }}>
-                  <div className="progress-stats">
-                    <span className="progress-text">Progress</span>
-                    <span className="tasks-count">
-                      {completedTasks}/{totalTasks} tasks completed
-                    </span>
-                  </div>
-                  <div className="progress-bar">
-                    <div className="progress-fill" style={{ width: `${completionRate}%` }}></div>
-                  </div>
-                </div>
-              );
-            })()}
-            {project.status === 'completed' && (
-              <div style={{ color: '#52c41a', fontWeight: 600, marginTop: 4, fontSize: '1.1rem' }}>
-                <CheckCircle style={{ verticalAlign: 'middle', marginRight: 4 }} size={18} />
-                All tasks are completed. Congratulations!
-              </div>
-            )}
           </div>
         </div>
+
+        {projectStats && (() => {
+          const taskStats = projectStats.taskStats || [];
+          const completedTasks = parseInt(taskStats.find(t => t.status === "completed")?.count || 0);
+          const totalTasks = taskStats.reduce((sum, t) => sum + parseInt(t.count), 0);
+          const completionRate = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
+          return (
+            <div className="project-progress" style={{ margin: '12px 0 0 0' }}>
+              <div className="progress-stats">
+                <span className="progress-text">Progress</span>
+                <span className="tasks-count">
+                  {completedTasks}/{totalTasks} tasks completed
+                </span>
+              </div>
+              <div className="progress-bar">
+                <div className="progress-fill" style={{ width: `${completionRate}%` }}></div>
+              </div>
+            </div>
+          );
+        })()}
 
         <div className="project-meta">
           <div className="meta-item">

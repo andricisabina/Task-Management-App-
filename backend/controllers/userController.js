@@ -147,6 +147,7 @@ exports.uploadProfilePhoto = asyncHandler(async (req, res, next) => {
       return next(new ErrorResponse('Please upload a file', 400));
     }
     
+    // Only allow the authenticated user to update their own photo (no role check)
     const user = await User.findByPk(req.user.id);
     
     // Delete old profile photo if exists

@@ -45,26 +45,32 @@ exports.getNotifications = asyncHandler(async (req, res, next) => {
   // Enhance notifications with task status for professional tasks
   const enhancedNotifications = await Promise.all(
     notifications.map(async (n) => {
+      let notifObj = n.toJSON();
       if (n.relatedType === 'professional_task' && n.relatedId) {
         try {
           const { ProfessionalTask } = require('../models');
           const task = await ProfessionalTask.findByPk(n.relatedId);
           if (task) {
-            return {
-              ...n.toJSON(),
-              taskStatus: task.status,
-              taskAccepted: acceptedStatuses.includes(task.status)
-                ? true
-                : (task.status === 'rejected' ? false : null)
-            };
+            notifObj.taskStatus = task.status;
+            notifObj.taskAccepted = acceptedStatuses.includes(task.status)
+              ? true
+              : (task.status === 'rejected' ? false : null);
+
+            // For extension_requested notifications, always include extensionStatus in data
+            if (notifObj.type === 'extension_requested') {
+              notifObj.data = notifObj.data || {};
+              notifObj.data.extensionStatus = task.extensionStatus || 'requested';
+            }
           } else {
-            return { ...n.toJSON(), taskStatus: 'deleted', taskAccepted: null };
+            notifObj.taskStatus = 'deleted';
+            notifObj.taskAccepted = null;
           }
         } catch {
-          return { ...n.toJSON(), taskStatus: 'deleted', taskAccepted: null };
+          notifObj.taskStatus = 'deleted';
+          notifObj.taskAccepted = null;
         }
       }
-      return n.toJSON();
+      return notifObj;
     })
   );
   

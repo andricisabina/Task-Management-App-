@@ -6,6 +6,7 @@ const api = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
+  withCredentials: true // Enable sending cookies
 });
 
 // Add a request interceptor to add the auth token to requests
@@ -105,40 +106,30 @@ api.interceptors.response.use(
     return response.data;
   },
   (error) => {
-    // Suppress 404 errors for getProfessionalTask
-    if (
-      error.response?.status === 404 &&
-      error.config?.url?.match(/^\/professional-tasks\/cd+$/) &&
-      error.config?.method === 'get'
-    ) {
-      // Return a recognizable value for not found, without throwing
-      return Promise.resolve({ notFound: true });
-    }
-    // Custom handling for permission errors on professional project deletion
-    if (
-      error.config?.url?.includes('/professional-projects/') &&
-      error.config?.method === 'delete' &&
-      error.response?.data?.message &&
-      error.response.data.message.toLowerCase().includes('permission')
-    ) {
-      throw new Error('You have no permissions');
-    }
+    // Handle authentication errors
     if (error.response?.status === 401) {
       const message = error.response?.data?.message || '';
-      // Only redirect to login for authentication errors
+      
+      // Clear token and redirect to login for specific auth errors
       if (
-        message.toLowerCase().includes('not authorized to access this route') ||
-        message.toLowerCase().includes('token expired')
+        message.toLowerCase().includes('not authorized') ||
+        message.toLowerCase().includes('token expired') ||
+        message.toLowerCase().includes('invalid token') ||
+        message.toLowerCase().includes('no token provided')
       ) {
         localStorage.removeItem('token');
         window.location.href = '/login';
+        toast.error('Your session has expired. Please log in again.');
       } else {
         toast.error(message || 'You are not authorized to perform this action.');
-        return Promise.reject(error);
       }
+      return Promise.reject(error);
     }
+
+    // Handle other errors
     const message = error.response?.data?.message || error.response?.data?.error || 'An error occurred';
-    throw new Error(message);
+    toast.error(message);
+    return Promise.reject(error);
   }
 );
 

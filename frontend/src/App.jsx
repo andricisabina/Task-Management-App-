@@ -20,40 +20,43 @@ import "./App.css"
 import ProductivityReport from "./pages/reports/ProductivityReport"
 import ProfessionalTaskDetails from "./pages/tasks/ProfessionalTaskDetails"
 import SocketTest from './components/SocketTest'
+import { NotificationProvider } from "./context/NotificationContext"
 
 function App() {
   return (
     <AuthProvider>
-      <TaskProvider>
-        <Router>
-          <ToastContainer position="top-right" autoClose={3000} />
-          <Routes>
-            <Route path="/login" element={<Login />} />
-            <Route path="/register" element={<Register />} />
-            <Route
-              element={
-                <ProtectedRoute>
-                  <Layout />
-                </ProtectedRoute>
-              }
-            >
-              <Route path="/" element={<Dashboard />} />
-              <Route path="/profile" element={<UserProfile />} />
-              <Route path="/personal-projects" element={<PersonalProjects />} />
-              <Route path="/professional-projects" element={<ProfessionalProjects />} />
-              <Route path="/tasks" element={<PersonalTasks />} />
-              <Route path="/projects/:type/:projectId" element={<ProjectDetailsSwitch />} />
-              <Route path="/tasks/:type/:taskId" element={<TaskDetails />} />
-              <Route path="/calendar" element={<CalendarPage />} />
-              <Route path="/notifications" element={<NotificationsPage />} />
-              <Route path="/reports/productivity" element={<ProductivityReport />} />
-              <Route path="/tasks/professional/:id" element={<ProfessionalTaskDetails />} />
-              <Route path="/socket-test" element={<SocketTest />} />
-            </Route>
-            <Route path="*" element={<Navigate to="/" replace />} />
-          </Routes>
-        </Router>
-      </TaskProvider>
+      <NotificationProvider>
+        <TaskProvider>
+          <Router>
+            <ToastContainer position="top-right" autoClose={3000} />
+            <Routes>
+              <Route path="/login" element={<Login />} />
+              <Route path="/register" element={<Register />} />
+              <Route
+                element={
+                  <ProtectedRoute>
+                    <Layout />
+                  </ProtectedRoute>
+                }
+              >
+                <Route path="/" element={<Dashboard />} />
+                <Route path="/profile" element={<UserProfile />} />
+                <Route path="/personal-projects" element={<PersonalProjects />} />
+                <Route path="/professional-projects" element={<ProfessionalProjects />} />
+                <Route path="/tasks" element={<PersonalTasks />} />
+                <Route path="/projects/:type/:projectId" element={<ProjectDetailsSwitch />} />
+                <Route path="/tasks/:type/:taskId" element={<TaskDetails />} />
+                <Route path="/calendar" element={<CalendarPage />} />
+                <Route path="/notifications" element={<NotificationsPage />} />
+                <Route path="/reports/productivity" element={<ProductivityReport />} />
+                <Route path="/tasks/professional/:id" element={<ProfessionalTaskDetails />} />
+                <Route path="/socket-test" element={<SocketTest />} />
+              </Route>
+              <Route path="*" element={<Navigate to="/" replace />} />
+            </Routes>
+          </Router>
+        </TaskProvider>
+      </NotificationProvider>
     </AuthProvider>
   )
 }

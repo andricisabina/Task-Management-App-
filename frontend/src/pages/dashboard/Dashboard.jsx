@@ -5,6 +5,7 @@ import { Link } from "react-router-dom"
 import { Calendar, Clock, AlertCircle, CheckCircle } from "react-feather"
 import { dashboardApi } from "../../services/api"
 import "./Dashboard.css"
+import TaskDetailsModal from "../../components/tasks/TaskDetailsModal"
 
 const Dashboard = () => {
   const [summary, setSummary] = useState({
@@ -15,6 +16,7 @@ const Dashboard = () => {
   const [allTasks, setAllTasks] = useState([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState(null)
+  const [selectedTask, setSelectedTask] = useState(null)
 
   useEffect(() => {
     fetchDashboardData()
@@ -44,6 +46,10 @@ const Dashboard = () => {
     }
   }
 
+  const handleTaskClick = (task) => {
+    setSelectedTask(task)
+  }
+
   if (isLoading) {
     return (
       <div className="loading-container">
@@ -68,7 +74,6 @@ const Dashboard = () => {
   return (
     <div className="dashboard-container">
       <h1 className="page-title">Task Dashboard</h1>
-
       <div className="dashboard-grid">
         <div className="dashboard-column">
           <div className="card today-tasks">
@@ -79,7 +84,11 @@ const Dashboard = () => {
               <ul className="task-list">
                 {summary.todayTasks.map((task) => (
                   <li key={task.id} className="task-item">
-                    <Link to={`/tasks/${task.type || (task.assignedToId ? 'professional' : 'personal')}/${task.id}`} style={{ textDecoration: 'none', color: 'inherit' }}>
+                    <div 
+                      className="task-link" 
+                      onClick={() => handleTaskClick(task)}
+                      style={{ cursor: 'pointer' }}
+                    >
                       <div className="task-info">
                         <span className="task-title">{task.title}</span>
                         <span className={`task-priority ${task.priority}`}>{task.priority}</span>
@@ -93,7 +102,7 @@ const Dashboard = () => {
                           <AlertCircle size={16} className="status-icon todo" />
                         )}
                       </div>
-                    </Link>
+                    </div>
                   </li>
                 ))}
               </ul>
@@ -112,7 +121,11 @@ const Dashboard = () => {
               <ul className="task-list">
                 {summary.overdueTasks.map((task) => (
                   <li key={task.id} className="task-item">
-                    <Link to={`/tasks/${task.type || (task.assignedToId ? 'professional' : 'personal')}/${task.id}`} style={{ textDecoration: 'none', color: 'inherit' }}>
+                    <div 
+                      className="task-link" 
+                      onClick={() => handleTaskClick(task)}
+                      style={{ cursor: 'pointer' }}
+                    >
                       <div className="task-info">
                         <span className="task-title">{task.title}</span>
                         <span className={`task-priority ${task.priority}`}>{task.priority}</span>
@@ -123,7 +136,7 @@ const Dashboard = () => {
                           Due {new Date(task.dueDate).toLocaleDateString()}
                         </span>
                       </div>
-                    </Link>
+                    </div>
                   </li>
                 ))}
               </ul>
@@ -133,7 +146,8 @@ const Dashboard = () => {
               </div>
             )}
           </div>
-
+        </div>
+        <div className="dashboard-column">
           <div className="card all-tasks">
             <div className="card-header">
               <h2 className="card-title">All Tasks</h2>
@@ -142,7 +156,11 @@ const Dashboard = () => {
               <ul className="task-list">
                 {allTasks.map((task) => (
                   <li key={task.type + '-' + task.id} className="task-item">
-                    <Link to={`/tasks/${task.type || (task.assignedToId ? 'professional' : 'personal')}/${task.id}`} style={{ textDecoration: 'none', color: 'inherit' }}>
+                    <div 
+                      className="task-link" 
+                      onClick={() => handleTaskClick(task)}
+                      style={{ cursor: 'pointer' }}
+                    >
                       <div className="task-info">
                         <span className="task-title">{task.title}</span>
                         <span className={`task-priority ${task.priority}`}>{task.priority}</span>
@@ -161,7 +179,7 @@ const Dashboard = () => {
                           {task.type === 'personal' ? 'Personal' : 'Professional'}
                         </span>
                       </div>
-                    </Link>
+                    </div>
                   </li>
                 ))}
               </ul>
@@ -172,45 +190,16 @@ const Dashboard = () => {
             )}
           </div>
         </div>
-
-        <div className="dashboard-column">
-          <div className="card recent-projects">
-            <div className="card-header">
-              <h2 className="card-title">Recent Projects</h2>
-              <div className="project-links">
-                <Link to="/personal-projects" className="project-link">
-                  Personal
-                </Link>
-                <Link to="/professional-projects" className="project-link">
-                  Professional
-                </Link>
-              </div>
-            </div>
-            {summary.recentProjects.length > 0 ? (
-              <ul className="project-list">
-                {summary.recentProjects.map((project) => (
-                  <li key={project.id} className="project-item">
-                    <div className="project-info">
-                      <span className="project-title">{project.title}</span>
-                      <span className="project-type">{project.type}</span>
-                    </div>
-                    <div className="progress-wrapper">
-                      <div className="progress-bar">
-                        <div className="progress-fill" style={{ width: `${project.completionRate || 0}%` }}></div>
-                      </div>
-                      <span className="progress-text">{project.completionRate || 0}%</span>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <div className="empty-state">
-                <p>No recent projects</p>
-              </div>
-            )}
-          </div>
-        </div>
       </div>
+
+      {selectedTask && (
+        <TaskDetailsModal
+          taskId={selectedTask.id}
+          type={selectedTask.type || (selectedTask.assignedToId ? 'professional' : 'personal')}
+          onClose={() => setSelectedTask(null)}
+          onTaskChange={fetchDashboardData}
+        />
+      )}
     </div>
   )
 }

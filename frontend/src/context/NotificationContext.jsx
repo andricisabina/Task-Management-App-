@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import api from '../services/api';
 import { toast } from "react-toastify";
 import { io as socketIOClient } from 'socket.io-client';
@@ -18,9 +18,12 @@ export const NotificationProvider = ({ children }) => {
   const [notifications, setNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [lastNotificationId, setLastNotificationId] = useState(null);
-  const [socket, setSocket] = useState(null);
   const [isConnected, setIsConnected] = useState(false);
   const { currentUser } = useAuth() || {};
+  
+  // Use refs to maintain socket instance and prevent unnecessary re-renders
+  const socketRef = useRef(null);
+  const pollingIntervalRef = useRef(null);
 
   const fetchNotifications = async () => {
     try {
@@ -77,7 +80,16 @@ export const NotificationProvider = ({ children }) => {
   };
 
   const setupSocket = () => {
-    if (!currentUser) return;
+    // Clean up existing socket if it exists
+    if (socketRef.current) {
+      socketRef.current.disconnect();
+      socketRef.current = null;
+    }
+
+    if (!currentUser?.id) {
+      console.log('[DEBUG] No user found, skipping socket setup');
+      return;
+    }
 
     console.log('[DEBUG] Setting up socket connection for user:', currentUser.id);
     
@@ -88,10 +100,12 @@ export const NotificationProvider = ({ children }) => {
       reconnectionDelay: 1000,
       reconnectionDelayMax: 5000,
       timeout: 20000,
+      auth: {
+        token: localStorage.getItem('token')
+      }
     });
 
-    // Expose socket instance for testing
-    window.socket = socketInstance;
+    socketRef.current = socketInstance;
 
     socketInstance.on('connect', () => {
       console.log('[DEBUG] Socket connected successfully');
@@ -100,32 +114,32 @@ export const NotificationProvider = ({ children }) => {
       // Join user's room after connection
       socketInstance.emit('join', currentUser.id);
       console.log('[DEBUG] Emitted join event for user:', currentUser.id);
+
+      // Clear polling interval when socket is connected
+      if (pollingIntervalRef.current) {
+        clearInterval(pollingIntervalRef.current);
+        pollingIntervalRef.current = null;
+      }
     });
 
     socketInstance.on('connect_error', (error) => {
       console.error('[ERROR] Socket connection error:', error);
       setIsConnected(false);
+      
+      // If socket connection fails, fall back to polling
+      if (!pollingIntervalRef.current) {
+        pollingIntervalRef.current = setInterval(fetchNotifications, 30000); // Poll every 30 seconds
+      }
     });
 
     socketInstance.on('disconnect', (reason) => {
       console.log('[DEBUG] Socket disconnected:', reason);
       setIsConnected(false);
-    });
-
-    socketInstance.on('reconnect', (attemptNumber) => {
-      console.log('[DEBUG] Socket reconnected after', attemptNumber, 'attempts');
-      setIsConnected(true);
       
-      // Re-join user's room after reconnection
-      socketInstance.emit('join', currentUser.id);
-    });
-
-    socketInstance.on('reconnect_error', (error) => {
-      console.error('[ERROR] Socket reconnection error:', error);
-    });
-
-    socketInstance.on('reconnect_failed', () => {
-      console.error('[ERROR] Socket reconnection failed after all attempts');
+      // Fall back to polling on disconnect
+      if (!pollingIntervalRef.current) {
+        pollingIntervalRef.current = setInterval(fetchNotifications, 30000);
+      }
     });
 
     socketInstance.on('notification', (notification) => {
@@ -141,27 +155,28 @@ export const NotificationProvider = ({ children }) => {
       );
     });
 
-    setSocket(socketInstance);
     return socketInstance;
   };
 
+  // Setup socket connection and fetch notifications when user changes
   useEffect(() => {
-    const socketInstance = setupSocket();
-    
+    if (currentUser?.id) {
+      setupSocket();
+      fetchNotifications();
+    }
+
     return () => {
-      console.log('[DEBUG] Cleaning up socket connection');
-      if (socketInstance) {
-        socketInstance.disconnect();
+      // Cleanup socket and polling on unmount
+      if (socketRef.current) {
+        socketRef.current.disconnect();
+        socketRef.current = null;
+      }
+      if (pollingIntervalRef.current) {
+        clearInterval(pollingIntervalRef.current);
+        pollingIntervalRef.current = null;
       }
     };
-  }, [currentUser]);
-
-  useEffect(() => {
-    fetchNotifications();
-    // Set up polling for new notifications every minute
-    const interval = setInterval(fetchNotifications, 60000);
-    return () => clearInterval(interval);
-  }, []);
+  }, [currentUser?.id]); // Only re-run if user ID changes
 
   const value = {
     notifications,

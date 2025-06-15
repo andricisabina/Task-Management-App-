@@ -8,15 +8,24 @@ const { User } = require('../models');
 // @route   POST /api/auth/register
 // @access  Public
 exports.register = asyncHandler(async (req, res, next) => {
-  const { name, email, password, organization, position } = req.body;
+  const { name, username, email, password } = req.body;
+
+  if (!username || username.length < 3) {
+    return next(new ErrorResponse('Username is required and must be at least 3 characters', 400));
+  }
+
+  // Check if username already exists
+  const existingUser = await User.findOne({ where: { username } });
+  if (existingUser) {
+    return next(new ErrorResponse('Username is already taken', 400));
+  }
 
   // Create user
   const user = await User.create({
     name,
+    username,
     email,
-    password,
-    organization,
-    position
+    password
   });
 
   sendTokenResponse(user, 201, res);
@@ -96,6 +105,7 @@ exports.updateDetails = asyncHandler(async (req, res, next) => {
   const fieldsToUpdate = {
     name: req.body.name,
     email: req.body.email,
+    username: req.body.username,
     bio: req.body.bio,
     organization: req.body.organization,
     position: req.body.position,

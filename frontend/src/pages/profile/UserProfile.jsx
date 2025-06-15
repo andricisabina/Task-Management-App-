@@ -270,25 +270,6 @@ const UserProfile = () => {
               <h3 className="detail-label">Email</h3>
               <p className="detail-value">{currentUser?.email || "email@example.com"}</p>
             </div>
-
-            <div className="detail-group">
-              <h3 className="detail-label">Account Statistics</h3>
-              <div className="stats-grid">
-                <div className="stat-item">
-                  <span className="stat-value">12</span>
-                  <span className="stat-label">Projects</span>
-                </div>
-                <div className="stat-item">
-                  <span className="stat-value">48</span>
-                  <span className="stat-label">Tasks</span>
-                </div>
-                <div className="stat-item">
-                  <span className="stat-value">86%</span>
-                  <span className="stat-label">Completion Rate</span>
-                </div>
-              </div>
-            </div>
-
             {!isEditing && (
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginTop: 32 }}>
                 <button

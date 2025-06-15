@@ -10,11 +10,10 @@ import "./Auth.css"
 const Register = () => {
   const [formData, setFormData] = useState({
     name: "",
+    username: "",
     email: "",
     password: "",
     confirmPassword: "",
-    organization: "", // Optional
-    position: "", // Optional
   })
   const [loading, setLoading] = useState(false)
   const navigate = useNavigate()
@@ -77,6 +76,20 @@ const Register = () => {
           </div>
           <div className="form-group">
             <input
+              type="text"
+              name="username"
+              className="form-input"
+              placeholder="Username"
+              value={formData.username}
+              onChange={handleChange}
+              required
+              minLength="3"
+              maxLength="32"
+              autoComplete="username"
+            />
+          </div>
+          <div className="form-group">
+            <input
               type="email"
               name="email"
               className="form-input"
@@ -108,26 +121,6 @@ const Register = () => {
               onChange={handleChange}
               required
               minLength="6"
-            />
-          </div>
-          <div className="form-group">
-            <input
-              type="text"
-              name="organization"
-              className="form-input"
-              placeholder="Organization (Optional)"
-              value={formData.organization}
-              onChange={handleChange}
-            />
-          </div>
-          <div className="form-group">
-            <input
-              type="text"
-              name="position"
-              className="form-input"
-              placeholder="Position (Optional)"
-              value={formData.position}
-              onChange={handleChange}
             />
           </div>
           <button type="submit" className="btn btn-primary login-btn" disabled={loading}>

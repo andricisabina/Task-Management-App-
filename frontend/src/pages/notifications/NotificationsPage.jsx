@@ -116,6 +116,10 @@ const NotificationsPage = () => {
     setExtensionLoading((prev) => ({ ...prev, [taskId]: 'approving' }));
     try {
       await tasksApi.approveDeadlineExtension(taskId);
+      setExtensionStatuses((prev) => ({ ...prev, [taskId]: 'approved' }));
+      // Optionally update the notification object in place for instant UI feedback
+      const notif = notifications.find(n => n.relatedId === taskId && n.type === 'extension_requested');
+      if (notif && notif.data) notif.data.extensionStatus = 'approved';
       await fetchNotifications();
       toast.success('Extension approved');
     } catch (error) {
@@ -129,6 +133,9 @@ const NotificationsPage = () => {
     setExtensionLoading((prev) => ({ ...prev, [taskId]: 'rejecting' }));
     try {
       await tasksApi.rejectDeadlineExtension(taskId);
+      setExtensionStatuses((prev) => ({ ...prev, [taskId]: 'rejected' }));
+      const notif = notifications.find(n => n.relatedId === taskId && n.type === 'extension_requested');
+      if (notif && notif.data) notif.data.extensionStatus = 'rejected';
       await fetchNotifications();
       toast.success('Extension rejected');
     } catch (error) {
@@ -137,6 +144,20 @@ const NotificationsPage = () => {
       setExtensionLoading((prev) => ({ ...prev, [taskId]: undefined }));
     }
   };
+
+  // Update useEffect to preserve local status if backend data is missing it
+  useEffect(() => {
+    setExtensionStatuses(prev => {
+      const extStatuses = { ...prev };
+      notifications.forEach(n => {
+        if (n.type === 'extension_requested' && n.relatedId) {
+          // Prefer backend status, otherwise keep local
+          extStatuses[n.relatedId] = n.data?.extensionStatus || extStatuses[n.relatedId] || 'requested';
+        }
+      });
+      return extStatuses;
+    });
+  }, [notifications]);
 
   const filteredNotifications = notifications.filter((n) => {
     if ((n.type === 'task_assigned' || n.type === 'extension_requested') && n.relatedType === 'professional_task' && n.relatedId) {
@@ -320,19 +341,17 @@ const NotificationsPage = () => {
                     const reason = n.data?.extensionRequestReason;
                     const extStatus = extensionStatuses[n.relatedId];
                     return (
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', margin: '8px 0', fontSize: 14 }}>
-                        <div style={{ flex: 1 }}>
-                          <div><b>Days requested:</b> {days || '?'}</div>
-                          <div><b>Reason:</b> {reason || 'N/A'}</div>
-                        </div>
-                        <div style={{ display: 'flex', alignItems: 'flex-start', minWidth: 180, justifyContent: 'flex-end' }}>
+                      <div style={{ fontSize: 14 }}>
+                        <div><b>Days requested:</b> {days || '?'}</div>
+                        <div><b>Reason:</b> {reason || 'N/A'}</div>
+                        <div style={{ display: 'flex', justifyContent: 'flex-start', alignItems: 'center', gap: 16, marginTop: 16 }}>
                           {extStatus === 'requested' ? (
                             <>
                               <button
                                 onClick={(e) => { e.stopPropagation(); handleApproveExtension(n.relatedId); }}
                                 disabled={extensionLoading[n.relatedId] === 'approving'}
                                 style={{
-                                  background: '#4caf50', color: '#fff', border: 'none', borderRadius: 6, padding: '4px 12px', fontWeight: 600, fontSize: 13, cursor: extensionLoading[n.relatedId] ? 'not-allowed' : 'pointer', opacity: extensionLoading[n.relatedId] ? 0.7 : 1, minWidth: 0, width: 'auto', marginRight: 8
+                                  background: '#4caf50', color: '#fff', border: 'none', borderRadius: 8, padding: '8px 18px', fontWeight: 700, fontSize: 15, cursor: extensionLoading[n.relatedId] ? 'not-allowed' : 'pointer', opacity: extensionLoading[n.relatedId] ? 0.7 : 1, minWidth: 0, width: 'auto'
                                 }}
                               >
                                 {extensionLoading[n.relatedId] === 'approving' ? 'Approving...' : 'Approve Extension'}
@@ -341,7 +360,7 @@ const NotificationsPage = () => {
                                 onClick={(e) => { e.stopPropagation(); handleRejectExtension(n.relatedId); }}
                                 disabled={extensionLoading[n.relatedId] === 'rejecting'}
                                 style={{
-                                  background: '#f44336', color: '#fff', border: 'none', borderRadius: 6, padding: '4px 12px', fontWeight: 600, fontSize: 13, cursor: extensionLoading[n.relatedId] ? 'not-allowed' : 'pointer', opacity: extensionLoading[n.relatedId] ? 0.7 : 1, minWidth: 0, width: 'auto'
+                                  background: '#f44336', color: '#fff', border: 'none', borderRadius: 8, padding: '8px 18px', fontWeight: 700, fontSize: 15, cursor: extensionLoading[n.relatedId] ? 'not-allowed' : 'pointer', opacity: extensionLoading[n.relatedId] ? 0.7 : 1, minWidth: 0, width: 'auto'
                                 }}
                               >
                                 {extensionLoading[n.relatedId] === 'rejecting' ? 'Rejecting...' : 'Reject Extension'}

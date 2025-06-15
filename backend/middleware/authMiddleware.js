@@ -12,13 +12,13 @@ exports.protect = asyncHandler(async (req, res, next) => {
     token = req.headers.authorization.split(' ')[1];
   }
   // Also check for token in cookies
-  if (!token && req.cookies && req.cookies.token) {
+  else if (req.cookies && req.cookies.token) {
     token = req.cookies.token;
   }
 
   // Make sure token exists
   if (!token) {
-    return next(new ErrorResponse('Not authorized to access this route', 401));
+    return next(new ErrorResponse('Not authorized to access this route - No token provided', 401));
   }
 
   try {
@@ -26,19 +26,27 @@ exports.protect = asyncHandler(async (req, res, next) => {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
     // Find user by ID
-    req.user = await User.findByPk(decoded.id);
+    const user = await User.findByPk(decoded.id);
 
-    if (!req.user) {
+    if (!user) {
       return next(new ErrorResponse('User not found', 404));
     }
 
     // Check if user is active
-    if (!req.user.isActive) {
+    if (!user.isActive) {
       return next(new ErrorResponse('User account is inactive', 401));
     }
 
+    // Add user to request object
+    req.user = user;
     next();
   } catch (err) {
+    if (err.name === 'TokenExpiredError') {
+      return next(new ErrorResponse('Token has expired', 401));
+    }
+    if (err.name === 'JsonWebTokenError') {
+      return next(new ErrorResponse('Invalid token', 401));
+    }
     return next(new ErrorResponse('Not authorized to access this route', 401));
   }
 });

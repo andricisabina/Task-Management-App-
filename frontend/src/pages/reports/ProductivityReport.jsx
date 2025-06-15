@@ -363,90 +363,258 @@ const ProductivityReport = () => {
       )}
       {reportData && (
         <>
-          <Grid container spacing={3} style={{ marginBottom: 32 }}>
-            <Grid item xs={12} md={3}>
-              <div className="card" style={{ padding: 24, textAlign: 'center' }}>
-                <Typography variant="h5" fontWeight={700}>Completion Rate</Typography>
-                <Typography variant="h3" color="primary" fontWeight={700}>{reportData.insights.completionRate.toFixed(1)}%</Typography>
-              </div>
-            </Grid>
-            <Grid item xs={12} md={3}>
-              <div className="card" style={{ padding: 24, textAlign: 'center' }}>
-                <Typography variant="h5" fontWeight={700}>Overdue Tasks</Typography>
-                <Typography variant="h3" color="error" fontWeight={700}>{reportData.insights.overdueCount}</Typography>
-              </div>
-            </Grid>
-            <Grid item xs={12} md={3}>
-              <div className="card" style={{ padding: 24, textAlign: 'center' }}>
-                <Typography variant="h5" fontWeight={700}>Average Duration</Typography>
-                <Typography variant="h3" color="secondary" fontWeight={700}>{(reportData.insights.averageDuration / (1000 * 60 * 60 * 24)).toFixed(1)} days</Typography>
-              </div>
-            </Grid>
-            <Grid item xs={12} md={3}>
-              <div className="card" style={{ padding: 24, textAlign: 'center' }}>
-                <Typography variant="h5" fontWeight={700}>Total Tasks</Typography>
-                <Typography variant="h3" color="textPrimary" fontWeight={700}>{reportData.insights.totalTasks}</Typography>
-              </div>
-            </Grid>
-          </Grid>
-          {/* Prepare chart data outside JSX to avoid redeclaration errors */}
-          {(() => {
-            const pieData = {
-              labels: ['Completed', 'In Progress', 'Pending', 'Overdue'],
-              datasets: [{
-                data: [
-                  reportData.insights.completedTasks,
-                  reportData.tasks.filter(t => t.status === 'in_progress').length,
-                  reportData.tasks.filter(t => t.status === 'pending').length,
-                  reportData.insights.overdueCount
-                ],
-                backgroundColor: ['#4CAF50', '#2196F3', '#FFC107', '#F44336']
-              }]
-            };
-            const isPieEmpty = pieData.datasets[0].data.every(v => v === 0);
-            const userData = reportData.tasks.reduce((acc, task) => {
-              const userName = task.User?.name || 'Unassigned';
-              acc[userName] = (acc[userName] || 0) + 1;
-              return acc;
-            }, {});
-            const barData = {
-              labels: Object.keys(userData),
-              datasets: [{
-                label: 'Tasks per User',
-                data: Object.values(userData),
-                backgroundColor: '#2196F3'
-              }]
-            };
-            const isBarEmpty = barData.datasets[0].data.length === 0 || barData.datasets[0].data.every(v => v === 0);
-            return (
-              <Grid container spacing={3}>
-                <Grid item xs={12} md={6}>
-                  <div className="card" style={{ padding: 24, minHeight: 340, display: 'flex', flexDirection: 'column' }}>
-                    <Typography variant="h6" fontWeight={700} gutterBottom>Task Status Distribution</Typography>
-                    <div style={{ flex: 1, minHeight: 260, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                      {isPieEmpty ? (
-                        <Typography color="textSecondary" align="center">No data to display</Typography>
-                      ) : (
-                        <Pie data={pieData} options={{ maintainAspectRatio: false }} />
-                      )}
-                    </div>
-                  </div>
-                </Grid>
-                <Grid item xs={12} md={6}>
-                  <div className="card" style={{ padding: 24, minHeight: 340, display: 'flex', flexDirection: 'column' }}>
-                    <Typography variant="h6" fontWeight={700} gutterBottom>Tasks per User</Typography>
-                    <div style={{ flex: 1, minHeight: 260, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                      {isBarEmpty ? (
-                        <Typography color="textSecondary" align="center">No data to display</Typography>
-                      ) : (
-                        <Bar data={barData} options={{ maintainAspectRatio: false, scales: { y: { beginAtZero: true } } }} />
-                      )}
-                    </div>
-                  </div>
-                </Grid>
+          {/* Render KPIs for My Tasks */}
+          {reportData.type === 'my_tasks' && (
+            <Grid container spacing={3} style={{ marginBottom: 32 }}>
+              <Grid item xs={12} md={3}>
+                <div className="card" style={{ padding: 24, textAlign: 'center' }}>
+                  <Typography variant="h5" fontWeight={700}>Completion Rate</Typography>
+                  <Typography variant="h3" color="primary" fontWeight={700}>{reportData.kpis.completionRate.toFixed(1)}%</Typography>
+                </div>
               </Grid>
-            );
-          })()}
+              <Grid item xs={12} md={3}>
+                <div className="card" style={{ padding: 24, textAlign: 'center' }}>
+                  <Typography variant="h5" fontWeight={700}>Overdue Tasks</Typography>
+                  <Typography variant="h3" color="error" fontWeight={700}>{reportData.kpis.overdueTasks}</Typography>
+                </div>
+              </Grid>
+              <Grid item xs={12} md={3}>
+                <div className="card" style={{ padding: 24, textAlign: 'center' }}>
+                  <Typography variant="h5" fontWeight={700}>Average Duration</Typography>
+                  <Typography variant="h3" color="secondary" fontWeight={700}>{(reportData.kpis.averageDuration / (1000 * 60 * 60 * 24)).toFixed(1)} days</Typography>
+                </div>
+              </Grid>
+              <Grid item xs={12} md={3}>
+                <div className="card" style={{ padding: 24, textAlign: 'center' }}>
+                  <Typography variant="h5" fontWeight={700}>Total Tasks</Typography>
+                  <Typography variant="h3" color="textPrimary" fontWeight={700}>{reportData.kpis.totalTasks}</Typography>
+                </div>
+              </Grid>
+            </Grid>
+          )}
+          {/* Render charts for My Tasks */}
+          {reportData.type === 'my_tasks' && (
+            <Grid container spacing={3}>
+              {/* Pie Chart: Task Status Distribution */}
+              <Grid item xs={12} md={4}>
+                <div className="card" style={{ padding: 24, minHeight: 340, display: 'flex', flexDirection: 'column' }}>
+                  <Typography variant="h6" fontWeight={700} gutterBottom>Task Status Distribution</Typography>
+                  <div style={{ flex: 1, minHeight: 260, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    {reportData.charts.statusDistribution && reportData.charts.statusDistribution.datasets[0].data.every(v => v === 0) ? (
+                      <Typography color="textSecondary" align="center">No data to display</Typography>
+                    ) : (
+                      <Pie data={reportData.charts.statusDistribution} options={{ maintainAspectRatio: false }} />
+                    )}
+                  </div>
+                </div>
+              </Grid>
+              {/* Line Chart: Tasks Completed Per Day */}
+              <Grid item xs={12} md={4}>
+                <div className="card" style={{ padding: 24, minHeight: 340, display: 'flex', flexDirection: 'column' }}>
+                  <Typography variant="h6" fontWeight={700} gutterBottom>Tasks Completed Per Day</Typography>
+                  <div style={{ flex: 1, minHeight: 260, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    {reportData.charts.completedPerDay && reportData.charts.completedPerDay.datasets[0].data.every(v => v === 0) ? (
+                      <Typography color="textSecondary" align="center">No data to display</Typography>
+                    ) : (
+                      <Bar data={reportData.charts.completedPerDay} options={{ maintainAspectRatio: false, scales: { y: { beginAtZero: true } } }} />
+                    )}
+                  </div>
+                </div>
+              </Grid>
+              {/* Bar Chart: Estimated vs Actual Duration */}
+              <Grid item xs={12} md={4}>
+                <div className="card" style={{ padding: 24, minHeight: 340, display: 'flex', flexDirection: 'column' }}>
+                  <Typography variant="h6" fontWeight={700} gutterBottom>Estimated vs Actual Duration</Typography>
+                  <div style={{ flex: 1, minHeight: 260, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    {reportData.charts.estimatedVsActual && reportData.charts.estimatedVsActual.datasets[0].data.every(v => v === 0) ? (
+                      <Typography color="textSecondary" align="center">No data to display</Typography>
+                    ) : (
+                      <Bar data={reportData.charts.estimatedVsActual} options={{ maintainAspectRatio: false, scales: { y: { beginAtZero: true } } }} />
+                    )}
+                  </div>
+                </div>
+              </Grid>
+            </Grid>
+          )}
+          {/* Render KPIs for Team Projects */}
+          {reportData.type === 'team_projects' && (
+            <Grid container spacing={3} style={{ marginBottom: 32 }}>
+              <Grid item xs={12} md={2.4}>
+                <div className="card" style={{ padding: 24, textAlign: 'center' }}>
+                  <Typography variant="h6" fontWeight={700}>Total Team Projects</Typography>
+                  <Typography variant="h4" color="primary" fontWeight={700}>{reportData.kpis.totalTeamProjects}</Typography>
+                </div>
+              </Grid>
+              <Grid item xs={12} md={2.4}>
+                <div className="card" style={{ padding: 24, textAlign: 'center' }}>
+                  <Typography variant="h6" fontWeight={700}>Team Members</Typography>
+                  <Typography variant="h4" color="primary" fontWeight={700}>{reportData.kpis.teamMembers}</Typography>
+                </div>
+              </Grid>
+              <Grid item xs={12} md={2.4}>
+                <div className="card" style={{ padding: 24, textAlign: 'center' }}>
+                  <Typography variant="h6" fontWeight={700}>Most Active Department</Typography>
+                  <Typography variant="h5" color="secondary" fontWeight={700}>{reportData.kpis.mostActiveDepartment}</Typography>
+                </div>
+              </Grid>
+              <Grid item xs={12} md={2.4}>
+                <div className="card" style={{ padding: 24, textAlign: 'center' }}>
+                  <Typography variant="h6" fontWeight={700}>Task Rejections</Typography>
+                  <Typography variant="h4" color="error" fontWeight={700}>{reportData.kpis.taskRejections}</Typography>
+                </div>
+              </Grid>
+              <Grid item xs={12} md={2.4}>
+                <div className="card" style={{ padding: 24, textAlign: 'center' }}>
+                  <Typography variant="h6" fontWeight={700}>Avg Acceptance Time</Typography>
+                  <Typography variant="h5" color="textPrimary" fontWeight={700}>{reportData.kpis.avgAcceptanceTime.toFixed(2)} days</Typography>
+                </div>
+              </Grid>
+            </Grid>
+          )}
+          {/* Render charts for Team Projects */}
+          {reportData.type === 'team_projects' && (
+            <Grid container spacing={3}>
+              {/* Bar Chart: Tasks per Department */}
+              <Grid item xs={12} md={4}>
+                <div className="card" style={{ padding: 24, minHeight: 340, display: 'flex', flexDirection: 'column' }}>
+                  <Typography variant="h6" fontWeight={700} gutterBottom>Tasks per Department</Typography>
+                  <div style={{ flex: 1, minHeight: 260, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    {reportData.charts.tasksPerDept && reportData.charts.tasksPerDept.datasets[0].data.every(v => v === 0) ? (
+                      <Typography color="textSecondary" align="center">No data to display</Typography>
+                    ) : (
+                      <Bar data={reportData.charts.tasksPerDept} options={{ maintainAspectRatio: false, scales: { y: { beginAtZero: true } } }} />
+                    )}
+                  </div>
+                </div>
+              </Grid>
+              {/* Stacked Bar: Task Status by Department */}
+              <Grid item xs={12} md={4}>
+                <div className="card" style={{ padding: 24, minHeight: 340, display: 'flex', flexDirection: 'column' }}>
+                  <Typography variant="h6" fontWeight={700} gutterBottom>Task Status by Department</Typography>
+                  <div style={{ flex: 1, minHeight: 260, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    {reportData.charts.taskStatusByDept && reportData.charts.taskStatusByDept.datasets.every(ds => ds.data.every(v => v === 0)) ? (
+                      <Typography color="textSecondary" align="center">No data to display</Typography>
+                    ) : (
+                      <Bar data={reportData.charts.taskStatusByDept} options={{ maintainAspectRatio: false, scales: { x: { stacked: true }, y: { beginAtZero: true, stacked: true } } }} />
+                    )}
+                  </div>
+                </div>
+              </Grid>
+              {/* Bar Chart: Tasks per User */}
+              <Grid item xs={12} md={4}>
+                <div className="card" style={{ padding: 24, minHeight: 340, display: 'flex', flexDirection: 'column' }}>
+                  <Typography variant="h6" fontWeight={700} gutterBottom>Tasks per User</Typography>
+                  <div style={{ flex: 1, minHeight: 260, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    {reportData.charts.tasksPerUser && reportData.charts.tasksPerUser.datasets[0].data.every(v => v === 0) ? (
+                      <Typography color="textSecondary" align="center">No data to display</Typography>
+                    ) : (
+                      <Bar data={reportData.charts.tasksPerUser} options={{ maintainAspectRatio: false, scales: { y: { beginAtZero: true } } }} />
+                    )}
+                  </div>
+                </div>
+              </Grid>
+            </Grid>
+          )}
+          {/* Render KPIs for My Projects */}
+          {reportData.type === 'my_projects' && (
+            <Grid container spacing={3} style={{ marginBottom: 32 }}>
+              <Grid item xs={12} md={3}>
+                <div className="card" style={{ padding: 24, textAlign: 'center' }}>
+                  <Typography variant="h6" fontWeight={700}>Total Projects</Typography>
+                  <Typography variant="h4" color="primary" fontWeight={700}>{reportData.kpis.totalProjects}</Typography>
+                </div>
+              </Grid>
+              <Grid item xs={12} md={3}>
+                <div className="card" style={{ padding: 24, textAlign: 'center' }}>
+                  <Typography variant="h6" fontWeight={700}>Project Completed</Typography>
+                  <Typography variant="h4" color={reportData.kpis.projectCompleted ? 'primary' : 'error'} fontWeight={700}>{reportData.kpis.projectCompleted ? 'Yes' : 'No'}</Typography>
+                </div>
+              </Grid>
+              <Grid item xs={12} md={3}>
+                <div className="card" style={{ padding: 24, textAlign: 'center' }}>
+                  <Typography variant="h6" fontWeight={700}>Avg Tasks per Project</Typography>
+                  <Typography variant="h4" color="secondary" fontWeight={700}>{reportData.kpis.avgTasksPerProject}</Typography>
+                </div>
+              </Grid>
+              <Grid item xs={12} md={3}>
+                <div className="card" style={{ padding: 24, textAlign: 'center' }}>
+                  <Typography variant="h6" fontWeight={700}>Avg Project Duration</Typography>
+                  <Typography variant="h4" color="textPrimary" fontWeight={700}>{(reportData.kpis.avgProjectDuration / (1000 * 60 * 60 * 24)).toFixed(1)} days</Typography>
+                </div>
+              </Grid>
+            </Grid>
+          )}
+          {/* Render charts for My Projects */}
+          {reportData.type === 'my_projects' && (
+            <Grid container spacing={3}>
+              {/* Bar Chart: Project Completion % */}
+              <Grid item xs={12} md={4}>
+                <div className="card" style={{ padding: 24, minHeight: 340, display: 'flex', flexDirection: 'column' }}>
+                  <Typography variant="h6" fontWeight={700} gutterBottom>Project Completion %</Typography>
+                  <div style={{ flex: 1, minHeight: 260, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    {reportData.charts.projectCompletionBar && reportData.charts.projectCompletionBar.datasets[0].data.every(v => v === 0) ? (
+                      <Typography color="textSecondary" align="center">No data to display</Typography>
+                    ) : (
+                      <Bar data={reportData.charts.projectCompletionBar} options={{ maintainAspectRatio: false, scales: { y: { beginAtZero: true, max: 100 } } }} />
+                    )}
+                  </div>
+                </div>
+              </Grid>
+              {/* Stacked Bar: Task Status per Project */}
+              <Grid item xs={12} md={4}>
+                <div className="card" style={{ padding: 24, minHeight: 340, display: 'flex', flexDirection: 'column' }}>
+                  <Typography variant="h6" fontWeight={700} gutterBottom>Task Status per Project</Typography>
+                  <div style={{ flex: 1, minHeight: 260, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    {reportData.charts.taskStatusStacked && reportData.charts.taskStatusStacked.datasets.every(ds => ds.data.every(v => v === 0)) ? (
+                      <Typography color="textSecondary" align="center">No data to display</Typography>
+                    ) : (
+                      <Bar data={reportData.charts.taskStatusStacked} options={{ maintainAspectRatio: false, scales: { x: { stacked: true }, y: { beginAtZero: true, stacked: true } } }} />
+                    )}
+                  </div>
+                </div>
+              </Grid>
+              {/* Gantt Data: List style */}
+              <Grid item xs={12} md={4}>
+                <div className="card" style={{ padding: 24, minHeight: 340, display: 'flex', flexDirection: 'column' }}>
+                  <Typography variant="h6" fontWeight={700} gutterBottom>Project Timelines (Gantt Data)</Typography>
+                  <div style={{ flex: 1, minHeight: 260, overflowY: 'auto' }}>
+                    {reportData.charts.ganttData && reportData.charts.ganttData.length > 0 ? (
+                      <ul style={{ padding: 0, margin: 0, listStyle: 'none' }}>
+                        {reportData.charts.ganttData.map((g, idx) => (
+                          <li key={idx} style={{ marginBottom: 8 }}>
+                            <strong>{g.label}</strong>: {g.start ? new Date(g.start).toLocaleDateString() : 'N/A'} - {g.end ? new Date(g.end).toLocaleDateString() : 'N/A'}
+                          </li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <Typography color="textSecondary" align="center">No data to display</Typography>
+                    )}
+                  </div>
+                </div>
+              </Grid>
+            </Grid>
+          )}
+          {/* Render Insights for all report types */}
+          {reportData.insights && reportData.insights.insightMessages && reportData.insights.insightMessages.length > 0 && (
+            <Grid container spacing={3} style={{ marginBottom: 32 }}>
+              <Grid item xs={12}>
+                <div className="card" style={{ padding: 24, minHeight: 80 }}>
+                  <Typography variant="h6" fontWeight={700} gutterBottom>Insights</Typography>
+                  <ul style={{ margin: 0, paddingLeft: 20 }}>
+                    {reportData.insights.insightMessages.map((msg, idx) => (
+                      <li key={idx} style={{ marginBottom: 6 }}>{msg}</li>
+                    ))}
+                  </ul>
+                </div>
+              </Grid>
+            </Grid>
+          )}
+          {/* Placeholders for other report types */}
+          {reportData.type !== 'my_tasks' && (
+            <Typography variant="h6" color="textSecondary" align="center" sx={{ mt: 4 }}>
+              Custom KPIs and charts for this report type coming soon.
+            </Typography>
+          )}
         </>
       )}
     </div>
