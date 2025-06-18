@@ -29,7 +29,16 @@ const Sidebar = () => {
         <div className="sidebar-header">
           <NavLink to="/profile" className="profile-link">
             <div className="profile-icon">
-              <User />
+              {currentUser?.profilePhoto ? (
+                <img
+                  src={`http://localhost:5000/${currentUser.profilePhoto.replace("backend/", "")}`}
+                  alt="Profile"
+                  className="sidebar-profile-photo"
+                  style={{ width: 40, height: 40, borderRadius: "50%", objectFit: "cover" }}
+                />
+              ) : (
+                <User />
+              )}
             </div>
             <span>My Profile</span>
           </NavLink>

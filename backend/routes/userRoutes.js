@@ -21,6 +21,9 @@ router.get('/search', searchUserByEmail);
 router.get('/department/:departmentId', getUsersByDepartment);
 router.get('/project/:projectId', getUsersForProject);
 
+// Profile photo upload (for all users) - MUST come before /:id route
+router.put('/profile-upload', uploadProfilePhoto);
+
 // Admin only routes
 router.route('/')
   .get(authorize('admin'), getUsers)
@@ -30,8 +33,5 @@ router.route('/:id')
   .get(authorize('admin'), getUser)
   .put(authorize('admin'), updateUser)
   .delete(authorize('admin'), deleteUser);
-
-// Profile photo upload (for all users)
-router.put('/profile-upload', uploadProfilePhoto);
 
 module.exports = router;

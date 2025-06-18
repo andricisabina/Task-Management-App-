@@ -8,10 +8,14 @@ import "./UserProfile.css"
 import { useNavigate } from "react-router-dom"
 
 const UserProfile = () => {
-  const { currentUser, updateProfile, logout } = useAuth()
+  const { currentUser, updateProfile, logout, setCurrentUser } = useAuth()
   const navigate = useNavigate()
   const [isEditing, setIsEditing] = useState(false)
-  const [avatar, setAvatar] = useState(currentUser?.avatarUrl || null)
+  const [avatar, setAvatar] = useState(
+    currentUser?.profilePhoto
+      ? `http://localhost:5000/${currentUser.profilePhoto.replace("backend/", "")}`
+      : null
+  )
   const [isUploading, setIsUploading] = useState(false)
   const fileInputRef = useRef(null)
   const [formData, setFormData] = useState({
@@ -62,6 +66,13 @@ const UserProfile = () => {
       // Update avatar state with the new profile photo path
       const profilePhotoUrl = `http://localhost:5000/${data.data.profilePhoto}`;
       setAvatar(profilePhotoUrl);
+      // Update currentUser context so the new photo appears everywhere
+      if (currentUser) {
+        setCurrentUser({
+          ...currentUser,
+          profilePhoto: data.data.profilePhoto
+        });
+      }
       toast.success('Profile photo updated successfully!');
       
     } catch (error) {
