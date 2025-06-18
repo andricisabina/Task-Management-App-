@@ -175,7 +175,7 @@ const NotificationsPage = () => {
           if ((n.type === 'task_assigned' || n.type === 'extension_requested') && n.relatedType === 'professional_task' && n.relatedId && n.taskStatus === 'deleted') {
             return (
               <div
-                key={n.id}
+                key={`deleted-${n.id}`}
                 style={{
                   background: '#fff0f0',
                   padding: 16,
