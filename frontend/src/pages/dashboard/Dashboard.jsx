@@ -163,7 +163,7 @@ const Dashboard = () => {
                     >
                       <div className="task-info">
                         <span className="task-title">{task.title}</span>
-                        <span className={`task-priority ${task.priority}`}>{task.priority}</span>
+                        {/* <span className={`task-priority ${task.priority}`}>{task.priority}</span> */}
                         {task.project && (
                           <span className="task-project" style={{ color: task.project.color || '#888', marginLeft: 8 }}>
                             {task.project.title}

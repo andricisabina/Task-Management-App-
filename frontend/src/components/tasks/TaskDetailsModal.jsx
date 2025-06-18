@@ -179,7 +179,7 @@ const TaskDetailsModal = ({ taskId, type, onClose, onTaskChange }) => {
           </div>
 
           <div className="task-status-selector">
-            <select value={task.status} onChange={handleStatusChange} className={`status-select status-${task.status}`}>
+            <select value={task.status} onChange={handleStatusChange} className={`status-select status-${task.status}`} disabled={task.status === 'completed'}>
               <option value="todo">To Do</option>
               <option value="in-progress">In Progress</option>
               <option value="completed">Completed</option>
@@ -212,7 +212,7 @@ const TaskDetailsModal = ({ taskId, type, onClose, onTaskChange }) => {
           )}
 
           <div className="task-actions">
-            <button className="btn btn-secondary" onClick={handleEditTask}>
+            <button className="edit-btn" onClick={handleEditTask} disabled={task.status === 'completed'}>
               Edit Task
             </button>
             <button className="btn btn-danger" onClick={handleDeleteTask}>

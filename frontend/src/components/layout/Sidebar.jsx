@@ -58,7 +58,7 @@ const Sidebar = () => {
 
           <NavLink to="/professional-projects" className="nav-item">
             <Briefcase className="nav-icon" />
-            <span>Professional Projects</span>
+            <span>Team Projects</span>
           </NavLink>
 
           <NavLink to="/notifications" className="nav-item">

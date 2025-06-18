@@ -1,9 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import BigCalendar from '../components/BigCalendar';
 import { useTaskContext } from '../context/TaskContext';
+import { useAuth } from '../context/AuthContext';
 
 const CalendarPage = () => {
   const { tasks, fetchTasks } = useTaskContext();
+  const { currentUser } = useAuth();
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -29,13 +31,19 @@ const CalendarPage = () => {
     );
   }
 
+  // Filter tasks for the current user
+  const userTasks = tasks.filter(task =>
+    (task.type === 'personal' && task.userId === currentUser?.id) ||
+    (task.type === 'professional' && task.assignedToId === currentUser?.id)
+  );
+
   return (
     <div className="calendar-page">
       <h1>Task Calendar</h1>
       <p className="calendar-description">
         View your tasks in month, week, or day view. Click on any event to see details.
       </p>
-      <BigCalendar tasks={tasks} />
+      <BigCalendar tasks={userTasks} />
     </div>
   );
 };

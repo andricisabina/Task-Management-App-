@@ -374,7 +374,7 @@ const PersonalTasks = () => {
                 {task.description}
               </div>
               <div className="task-actions" style={{ marginTop: 8 }}>
-                <button className="action-btn edit-btn" onClick={() => handleEditTask(task)}>
+                <button className="action-btn edit-btn" onClick={() => handleEditTask(task)} disabled={task.status === 'completed'}>
                   Edit
                 </button>
                 <button className="action-btn delete-btn" onClick={() => handleDeleteTask(task.id)}>
@@ -388,8 +388,9 @@ const PersonalTasks = () => {
               >
                 <span
                   className={`task-status-bar status-${task.status.replace('in-progress', 'inprogress').replace('completed', 'done')}`}
-                  style={{ fontSize: '1.05rem', padding: '6px 20px', borderRadius: 10, fontWeight: 600, minWidth: 120, maxWidth: 200, textAlign: 'center', boxShadow: '0 8px 24px rgba(0,0,0,0.18)', display: 'inline-block', width: 'auto', cursor: 'pointer', background: '#fff', whiteSpace: 'nowrap' }}
+                  style={{ fontSize: '1.05rem', padding: '6px 20px', borderRadius: 10, fontWeight: 600, minWidth: 120, maxWidth: 200, textAlign: 'center', boxShadow: '0 8px 24px rgba(0,0,0,0.18)', display: 'inline-block', width: 'auto', cursor: task.status === 'completed' ? 'not-allowed' : 'pointer', background: '#fff', whiteSpace: 'nowrap' }}
                   onClick={e => {
+                    if (task.status === 'completed') return;
                     const rect = e.target.getBoundingClientRect()
                     setOpenStatusDropdown(openStatusDropdown === task.id ? null : task.id)
                     setPopoverAnchor(openStatusDropdown === task.id ? null : rect)
@@ -397,7 +398,7 @@ const PersonalTasks = () => {
                 >
                   {task.status === 'todo' ? 'To Do' : task.status === 'in-progress' ? 'In Progress' : task.status === 'completed' ? 'Completed' : task.status === 'on-hold' ? 'On Hold' : task.status === 'cancelled' ? 'Cancelled' : task.status.replace(/\b\w/g, l => l.toUpperCase())}
                 </span>
-                {openStatusDropdown === task.id && (
+                {openStatusDropdown === task.id && task.status !== 'completed' && (
                   <StatusPopover
                     anchorRect={popoverAnchor}
                     options={statusOptions}

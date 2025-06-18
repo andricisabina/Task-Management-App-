@@ -402,7 +402,7 @@ const PersonalProjectDetails = () => {
                   {task.description}
                 </div>
                 <div className="task-actions" style={{ marginTop: 8 }}>
-                  <button className="action-btn edit-btn" onClick={() => handleEditTask(task)}>
+                  <button className="action-btn edit-btn" onClick={() => handleEditTask(task)} disabled={task.status === 'completed'}>
                     Edit
                   </button>
                   <button className="action-btn delete-btn" onClick={() => handleDeleteTask(task.id)}>
@@ -425,13 +425,14 @@ const PersonalProjectDetails = () => {
                       boxShadow: '0 8px 24px rgba(0,0,0,0.18)',
                       display: 'inline-block',
                       width: 'auto',
-                      cursor: 'pointer',
+                      cursor: task.status === 'completed' ? 'not-allowed' : 'pointer',
                       background: openStatusDropdown === task.id ? '#f0f4ff' : '#fff',
                       whiteSpace: 'nowrap',
                       border: '1px solid #e0e0e0',
                       transition: 'background 0.15s, box-shadow 0.15s',
                     }}
                     onClick={e => {
+                      if (task.status === 'completed') return;
                       const rect = e.target.getBoundingClientRect()
                       setOpenStatusDropdown(openStatusDropdown === task.id ? null : task.id)
                       setPopoverAnchor(openStatusDropdown === task.id ? null : rect)
@@ -441,7 +442,7 @@ const PersonalProjectDetails = () => {
                   >
                     {task.status === 'todo' ? 'To Do' : task.status === 'in-progress' ? 'In Progress' : task.status === 'completed' ? 'Completed' : task.status === 'on-hold' ? 'On Hold' : task.status === 'cancelled' ? 'Cancelled' : task.status.replace(/\b\w/g, l => l.toUpperCase())}
                   </span>
-                  {openStatusDropdown === task.id && (
+                  {openStatusDropdown === task.id && task.status !== 'completed' && (
                     <StatusPopover
                       anchorRect={popoverAnchor}
                       options={statusOptions}
