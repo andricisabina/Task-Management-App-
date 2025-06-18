@@ -8,7 +8,8 @@ const {
   deleteUser,
   uploadProfilePhoto,
   getUsersByDepartment,
-  searchUserByEmail
+  searchUserByEmail,
+  getUsersForProject
 } = require('../controllers/userController');
 const { protect, authorize } = require('../middleware/authMiddleware');
 
@@ -18,6 +19,7 @@ router.use(protect);
 // User search and department search are available to all authenticated users
 router.get('/search', searchUserByEmail);
 router.get('/department/:departmentId', getUsersByDepartment);
+router.get('/project/:projectId', getUsersForProject);
 
 // Admin only routes
 router.route('/')

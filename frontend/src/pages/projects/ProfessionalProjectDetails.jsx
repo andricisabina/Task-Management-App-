@@ -1151,7 +1151,7 @@ const ProfessionalProjectDetails = () => {
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
                   <span style={{ fontWeight: 600 }}>{dept.name}</span>
                   {canAdd && (
-                    <button className="btn btn-sm btn-primary" style={{ marginLeft: 8 }} onClick={() => openAddMemberModal(dept)}>
+                    <button className="btn btn-sm btn-primary" style={{ marginLeft: 8 }} onClick={() => openAddMemberModal(dept)} disabled={!project || !project.id}>
                       <Plus size={14} /> Add Member
                     </button>
                   )}

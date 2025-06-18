@@ -96,6 +96,12 @@ export const departmentsApi = {
   getDepartments: () => api.get('/departments'),
 };
 
+// Users API
+export const usersApi = {
+  getAllUsers: () => api.get('/users'),
+  getUsersForProject: (projectId) => api.get(`/users/project/${projectId}`),
+};
+
 // Error interceptor
 api.interceptors.response.use(
   (response) => {

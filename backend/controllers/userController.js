@@ -200,3 +200,13 @@ exports.searchUserByEmail = asyncHandler(async (req, res, next) => {
   if (!user) return next(new ErrorResponse('User not found', 404));
   res.status(200).json({ user });
 });
+
+// @desc    Get users for a project (manager/leader access)
+// @route   GET /api/users/project/:projectId
+// @access  Private
+exports.getUsersForProject = asyncHandler(async (req, res, next) => {
+  const { User } = require('../models');
+  const users = await User.findAll({ attributes: { exclude: ['password'] } });
+  console.log('Returning users:', users.map(u => ({ id: u.id, email: u.email, name: u.name })));
+  return res.status(200).json({ success: true, count: users.length, data: users });
+});

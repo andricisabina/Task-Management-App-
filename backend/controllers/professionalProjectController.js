@@ -16,7 +16,7 @@ exports.getProfessionalProjects = asyncHandler(async (req, res, next) => {
       where: {
         [Op.or]: [
           { creatorId: userId },
-          { '$ProjectMembers.userId$': userId, '$ProjectMembers.role$': 'leader' }
+          { '$ProjectMembers.userId$': userId }
         ]
       },
       include: [
@@ -29,7 +29,6 @@ exports.getProfessionalProjects = asyncHandler(async (req, res, next) => {
           model: ProjectMember,
           as: 'ProjectMembers',
           attributes: ['userId', 'departmentId', 'role', 'status'],
-          where: { role: 'leader' },
           required: false,
           include: [{ model: User, as: 'member', attributes: ['id', 'name', 'email'] }]
         },
@@ -495,21 +494,27 @@ exports.addProjectMember = asyncHandler(async (req, res, next) => {
   // Add member (with departmentId if provided)
   await ProjectMember.create({ userId, projectId, departmentId: departmentId || null });
 
-  // Send invitation email to the new member
-  try {
-    await sendEmail({
-      to: user.email,
-      subject: `You've been added to the project: ${project.title}`,
-      text: `Hello ${user.name || user.email},\n\nYou have been added as a member to the project: ${project.title}.\nPlease log in to view your tasks and participate.\n\nThank you!`
-    });
-  } catch (emailErr) {
-    console.error('Failed to send member invitation email:', emailErr);
-  }
-
-  res.status(200).json({
-    success: true,
-    message: 'Member added successfully'
+  // Fetch and return the updated project with all members and user info
+  const updatedProject = await ProfessionalProject.findOne({
+    where: { id: projectId },
+    include: [
+      { model: User, as: 'creator', attributes: ['id', 'name', 'email'] },
+      {
+        model: ProjectMember,
+        as: 'ProjectMembers',
+        attributes: ['userId', 'departmentId', 'role', 'status'],
+        required: false,
+        include: [{ model: User, as: 'member', attributes: ['id', 'name', 'email'] }]
+      },
+      {
+        model: Department,
+        as: 'departments',
+        through: { attributes: ['leaderId'] },
+        attributes: ['id', 'name', 'color']
+      }
+    ]
   });
+  return res.status(200).json({ success: true, data: updatedProject });
 });
 
 // @desc    Remove member from professional project

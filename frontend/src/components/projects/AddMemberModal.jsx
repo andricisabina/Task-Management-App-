@@ -1,31 +1,30 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { toast } from 'react-toastify';
+import { usersApi } from '../../services/api';
 
 const AddMemberModal = ({ open, onClose, onAdd, department, projectId }) => {
-  const [email, setEmail] = useState('');
+  const [users, setUsers] = useState([]);
+  const [selectedUserId, setSelectedUserId] = useState('');
   const [loading, setLoading] = useState(false);
-  const [user, setUser] = useState(null);
 
-  // Simulate user search by email (replace with real API call if needed)
-  const handleSearch = async () => {
-    setLoading(true);
-    setUser(null);
-    try {
-      const res = await fetch(`/api/users/search?email=${encodeURIComponent(email)}`, {
-        credentials: 'include'
-      });
-      if (!res.ok) throw new Error('User not found');
-      const data = await res.json();
-      setUser(data.user);
-    } catch (err) {
-      toast.error('User not found');
-    } finally {
-      setLoading(false);
+  useEffect(() => {
+    console.log('AddMemberModal open:', open, 'projectId:', projectId);
+    if (open && projectId) {
+      setLoading(true);
+      usersApi.getUsersForProject(projectId)
+        .then(res => {
+          console.log('Fetched users:', res.data);
+          setUsers(res.data || []);
+        })
+        .catch(() => {
+          toast.error('Failed to fetch users');
+        })
+        .finally(() => setLoading(false));
     }
-  };
+  }, [open, projectId]);
 
   const handleAdd = () => {
-    console.log('handleAdd called', user, department);
+    const user = users.find(u => u.id === parseInt(selectedUserId));
     if (!user) return toast.error('Please select a user');
     onAdd(user.id, department?.id);
   };
@@ -37,25 +36,22 @@ const AddMemberModal = ({ open, onClose, onAdd, department, projectId }) => {
       <div className="modal" style={{ background: '#fff', borderRadius: 12, padding: 32, minWidth: 340, maxWidth: 400, boxShadow: '0 8px 32px rgba(0,0,0,0.18)' }}>
         <h2 style={{ marginBottom: 18 }}>Add Member to {department?.name || 'Project'}</h2>
         <div style={{ marginBottom: 16 }}>
-          <input
-            type="email"
-            placeholder="Enter user email..."
-            value={email}
-            onChange={e => setEmail(e.target.value)}
+          <select
+            value={selectedUserId}
+            onChange={e => setSelectedUserId(e.target.value)}
             style={{ width: '100%', padding: 8, borderRadius: 6, border: '1px solid #ccc', marginBottom: 8 }}
             disabled={loading}
-          />
-          <button className="btn btn-sm btn-primary" onClick={handleSearch} disabled={loading || !email} style={{ marginBottom: 8 }}>
-            {loading ? 'Searching...' : 'Search User'}
-          </button>
+          >
+            <option value="">Select a user...</option>
+            {users.map(user => (
+              <option key={user.id} value={user.id}>
+                {user.name ? `${user.name} (${user.email})` : user.email}
+              </option>
+            ))}
+          </select>
         </div>
-        {user && (
-          <div style={{ marginBottom: 16, color: '#1890ff' }}>
-            <strong>Found:</strong> {user.name || user.email}
-          </div>
-        )}
         <div style={{ display: 'flex', gap: 12, marginTop: 18 }}>
-          <button className="btn btn-primary" onClick={handleAdd} disabled={!user || loading}>Add</button>
+          <button className="btn btn-primary" onClick={handleAdd} disabled={!selectedUserId || loading}>Add</button>
           <button className="btn btn-secondary" onClick={onClose} disabled={loading}>Cancel</button>
         </div>
       </div>
