@@ -205,9 +205,7 @@ const ProductivityReport = () => {
   return (
     <LocalizationProvider dateAdapter={AdapterDateFns}>
       <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
-        <Typography variant="h4" gutterBottom>
-          Productivity Report
-        </Typography>
+        <h1 className="page-title">Productivity Report</h1>
 
         <Paper elevation={3} sx={{ p: 3, mb: 3 }}>
           <Grid container spacing={3}>

@@ -92,7 +92,7 @@ const Sidebar = () => {
 
           <NavLink to="/reports/productivity" className="nav-item">
             <BarChart2 className="nav-icon" />
-            <span>Productivity Report</span>
+            <span>Productivity</span>
           </NavLink>
         </nav>
 

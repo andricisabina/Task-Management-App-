@@ -2,12 +2,14 @@
 
 import { useState, useEffect } from "react"
 import { Link } from "react-router-dom"
-import { Calendar, Clock, AlertCircle, CheckCircle } from "react-feather"
+import { Calendar, Clock, AlertCircle, CheckCircle, Home } from "react-feather"
 import { dashboardApi } from "../../services/api"
 import "./Dashboard.css"
 import TaskDetailsModal from "../../components/tasks/TaskDetailsModal"
+import { useAuth } from "../../context/AuthContext"
 
 const Dashboard = () => {
+  const { currentUser } = useAuth();
   const [summary, setSummary] = useState({
     todayTasks: [],
     overdueTasks: [],
@@ -50,6 +52,11 @@ const Dashboard = () => {
     setSelectedTask(task)
   }
 
+  // Calculate summary stats
+  const totalTasks = allTasks.length;
+  const todayCount = summary.todayTasks.length;
+  const overdueCount = summary.overdueTasks.length;
+
   if (isLoading) {
     return (
       <div className="loading-container">
@@ -73,7 +80,32 @@ const Dashboard = () => {
 
   return (
     <div className="dashboard-container">
-      <h1 className="page-title">Task Dashboard</h1>
+      <div style={{ marginBottom: 32 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <Home size={32} color="#C4DFF5" />
+          <h1 className="page-title" style={{ marginBottom: 0 }}>Home</h1>
+        </div>
+        <div style={{ fontSize: '1.3rem', color: 'inherit', fontWeight: 600, marginTop: 8 }}>
+          Welcome back{currentUser?.name ? `, ${currentUser.name}` : ''}!
+        </div>
+        <div style={{ display: 'flex', gap: 32, marginTop: 18, alignItems: 'center', flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <CheckCircle size={22} color="#43a047" />
+            <span style={{ fontWeight: 500 }}>Today's Tasks:</span>
+            <span style={{ fontWeight: 700, color: '#222' }}>{todayCount}</span>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <AlertCircle size={22} color="#f44336" />
+            <span style={{ fontWeight: 500 }}>Overdue:</span>
+            <span style={{ fontWeight: 700, color: '#222' }}>{overdueCount}</span>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <Calendar size={22} color="#1976d2" />
+            <span style={{ fontWeight: 500 }}>Total Tasks:</span>
+            <span style={{ fontWeight: 700, color: '#222' }}>{totalTasks}</span>
+          </div>
+        </div>
+      </div>
       <div className="dashboard-grid">
         <div className="dashboard-column">
           <div className="card today-tasks">

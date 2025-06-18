@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from "react"
 import { Link } from "react-router-dom"
-import { Plus, Search, Filter, CheckCircle, Calendar } from "react-feather"
+import { Plus, Search, Filter, CheckCircle, Calendar, CheckSquare } from "react-feather"
 import { toast } from "react-toastify"
 import TaskModal from "../../components/tasks/TaskModal"
 import "./Tasks.css"
@@ -275,7 +275,10 @@ const PersonalTasks = () => {
   return (
     <div className="tasks-container">
       <div className="tasks-header">
-        <h1 className="page-title">My Tasks</h1>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <CheckSquare size={32} color="#C4DFF5" style={{ verticalAlign: 'middle' }} />
+          <h1 className="page-title" style={{ lineHeight: '1', display: 'flex', alignItems: 'center', marginBottom: 0 }}>My Tasks</h1>
+        </div>
         <button className="btn btn-primary create-btn" onClick={handleCreateTask}>
           <Plus size={16} /> New Task
         </button>

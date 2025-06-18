@@ -141,7 +141,10 @@ const PersonalProjects = () => {
   return (
     <div className="projects-container">
       <div className="projects-header">
-        <h1 className="page-title">My Projects</h1>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <Folder size={32} color="#C4DFF5" style={{ verticalAlign: 'middle' }} />
+          <h1 className="page-title" style={{ lineHeight: '1', display: 'flex', alignItems: 'center', marginBottom: 0 }}>My Projects</h1>
+        </div>
         <button className="btn btn-primary create-btn" onClick={handleCreateProject}>
           <Plus size={16} /> New Project
         </button>

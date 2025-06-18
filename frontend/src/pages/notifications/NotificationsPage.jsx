@@ -4,6 +4,7 @@ import api, { tasksApi, projectsApi } from "../../services/api";
 import { useAuth } from "../../context/AuthContext";
 import { Link } from "react-router-dom";
 import { toast } from "react-toastify";
+import { Bell } from "react-feather";
 
 const NotificationsPage = () => {
   const { currentUser } = useAuth ? useAuth() : { currentUser: null };
@@ -168,7 +169,12 @@ const NotificationsPage = () => {
 
   return (
     <div style={{ padding: 32 }}>
-      <h2>Notifications {unreadCount > 0 && <span style={{ color: "#ff5252" }}>({unreadCount} unread)</span>}</h2>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8 }}>
+        <Bell size={32} color="#C4DFF5" style={{ verticalAlign: 'middle' }} />
+        <h1 className="page-title" style={{ lineHeight: '1', display: 'flex', alignItems: 'center', marginBottom: 0 }}>
+          Notifications {unreadCount > 0 && <span style={{ color: "#ff5252" }}>({unreadCount} unread)</span>}
+        </h1>
+      </div>
       {notifications.length === 0 && <div>No notifications</div>}
       <div>
         {notifications.map((n) => {

@@ -25,8 +25,8 @@ const statusColors = {
   'pending': '#ffb300',
   'in-progress': '#1976d2',
   'todo': '#ffb300',
-  'professional': '#43a047',
-  'personal': '#1976d2',
+  'professional': '#023e8a',
+  'personal': '#25a18e',
 };
 
 const typeLabels = {

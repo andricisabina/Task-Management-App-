@@ -32,6 +32,7 @@ import {
 } from 'chart.js';
 import { toast } from 'react-toastify';
 import api from '../../services/api';
+import { BarChart2 } from "react-feather";
 
 // Register ChartJS components
 ChartJS.register(
@@ -271,8 +272,11 @@ const ProductivityReport = () => {
 
   return (
     <div className="projects-container" style={{ minHeight: '100vh', background: '#f7f9fb' }}>
-      <div className="projects-header" style={{ marginBottom: 32 }}>
-        <h1 className="page-title">Productivity Report</h1>
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', marginBottom: 32 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <BarChart2 size={32} color="#C4DFF5" style={{ verticalAlign: 'middle' }} />
+          <h1 className="page-title" style={{ lineHeight: '1', display: 'flex', alignItems: 'center', marginBottom: 0 }}>Productivity</h1>
+        </div>
       </div>
       <div className="card" style={{ marginBottom: 32, padding: 32 }}>
         <Grid container spacing={3} alignItems="center">
