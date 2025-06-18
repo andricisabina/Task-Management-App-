@@ -14,7 +14,8 @@ const TaskModal = ({ task, type = 'personal', teamMembers = [], departments = []
     assignedTo: "",
     assignedToEmail: "",
     departmentId: "",
-    status: "todo"
+    status: "todo",
+    estimatedTime: ""
   })
 
   useEffect(() => {
@@ -36,7 +37,8 @@ const TaskModal = ({ task, type = 'personal', teamMembers = [], departments = []
         assignedTo: task.assignedTo || "",
         assignedToEmail: task.assignedToEmail || "",
         departmentId: isProfessional ? (task.departmentId || (departments && departments.length > 0 ? departments[0].id : "")) : "",
-        status: task.status || (isProfessional ? "pending" : "todo")
+        status: task.status || (isProfessional ? "pending" : "todo"),
+        estimatedTime: task.estimatedTime ? (task.estimatedTime / 60).toString() : ""
       });
     } else {
       const tomorrow = new Date();
@@ -50,7 +52,8 @@ const TaskModal = ({ task, type = 'personal', teamMembers = [], departments = []
         assignedTo: "",
         assignedToEmail: "",
         departmentId: isProfessional && departments && departments.length > 0 ? departments[0].id : "",
-        status: isProfessional ? "pending" : "todo"
+        status: isProfessional ? "pending" : "todo",
+        estimatedTime: ""
       });
     }
     // eslint-disable-next-line
@@ -76,6 +79,20 @@ const TaskModal = ({ task, type = 'personal', teamMembers = [], departments = []
       dueDate: dueDateTime,
     }
     delete submitData.dueTime
+
+    // Convert estimated time from hours to minutes for professional tasks
+    if (type === 'professional' && formData.estimatedTime) {
+      submitData.estimatedTime = Math.round(parseFloat(formData.estimatedTime) * 60);
+    } else {
+      delete submitData.estimatedTime;
+    }
+
+    // Convert estimated time from hours to minutes for both personal and professional tasks
+    if (formData.estimatedTime) {
+      submitData.estimatedTime = Math.round(parseFloat(formData.estimatedTime) * 60);
+    } else {
+      delete submitData.estimatedTime;
+    }
 
     // Only include departmentId for professional tasks
     if (!type === 'professional') {
@@ -174,6 +191,44 @@ const TaskModal = ({ task, type = 'personal', teamMembers = [], departments = []
               />
             </div>
           </div>
+
+          {type === 'professional' && (
+            <div className="form-group">
+              <label htmlFor="estimatedTime" className="form-label">
+                Estimated Time (hours)
+              </label>
+              <input
+                type="number"
+                id="estimatedTime"
+                name="estimatedTime"
+                className="form-input"
+                value={formData.estimatedTime}
+                onChange={handleChange}
+                placeholder="e.g., 2.5"
+                min="0"
+                step="0.5"
+              />
+            </div>
+          )}
+
+          {type === 'personal' && (
+            <div className="form-group">
+              <label htmlFor="estimatedTime" className="form-label">
+                Estimated Time (hours)
+              </label>
+              <input
+                type="number"
+                id="estimatedTime"
+                name="estimatedTime"
+                className="form-input"
+                value={formData.estimatedTime}
+                onChange={handleChange}
+                placeholder="e.g., 2.5"
+                min="0"
+                step="0.5"
+              />
+            </div>
+          )}
 
           {type === 'professional' && departments.length > 0 && (
             <div className="form-group">

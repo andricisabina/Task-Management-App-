@@ -5,6 +5,7 @@ import { Link } from "react-router-dom"
 import { Plus, Search, Filter, CheckCircle, Calendar, CheckSquare } from "react-feather"
 import { toast } from "react-toastify"
 import TaskModal from "../../components/tasks/TaskModal"
+import ActualTimeModal from "../../components/tasks/ActualTimeModal"
 import "./Tasks.css"
 import { tasksApi } from "../../services/api"
 import ReactDOM from "react-dom"
@@ -126,6 +127,8 @@ const PersonalTasks = () => {
   const [hoveredStatusDropdown, setHoveredStatusDropdown] = useState(null)
   const [popoverAnchor, setPopoverAnchor] = useState(null)
   const [deleteConfirm, setDeleteConfirm] = useState({ open: false, taskId: null })
+  const [showActualTimeModal, setShowActualTimeModal] = useState(false)
+  const [taskToComplete, setTaskToComplete] = useState(null)
   const statusOptions = [
     { value: 'todo', label: 'To Do' },
     { value: 'in-progress', label: 'In Progress' },
@@ -264,9 +267,37 @@ const PersonalTasks = () => {
     try {
       const taskToUpdate = tasks.find((task) => task.id === taskId)
       if (!taskToUpdate) return
+      
+      // If completing a task, show the actual time modal
+      if (newStatus === 'completed') {
+        setTaskToComplete(taskToUpdate)
+        setShowActualTimeModal(true)
+        return
+      }
+      
       const response = await tasksApi.updatePersonalTask(taskId, { ...taskToUpdate, status: newStatus })
       setTasks(tasks.map((task) => (task.id === taskId ? response.data : task)))
       toast.success("Task status updated")
+    } catch (err) {
+      toast.error(err.message)
+    }
+  }
+
+  const handleCompleteTask = async (actualTimeInMinutes) => {
+    try {
+      const taskToUpdate = taskToComplete
+      const payload = { 
+        ...taskToUpdate, 
+        status: 'completed',
+        actualTime: actualTimeInMinutes,
+        completedAt: new Date().toISOString()
+      }
+      
+      const response = await tasksApi.updatePersonalTask(taskToComplete.id, payload)
+      setTasks(tasks.map((task) => (task.id === taskToComplete.id ? response.data : task)))
+      toast.success("Task completed successfully")
+      setShowActualTimeModal(false)
+      setTaskToComplete(null)
     } catch (err) {
       toast.error(err.message)
     }
@@ -367,6 +398,16 @@ const PersonalTasks = () => {
                 <span style={{ color: '#888', fontSize: '0.95rem' }}>
                   Due: {task.dueDate ? new Date(task.dueDate).toLocaleString() : 'N/A'}
                 </span>
+                {task.estimatedTime && (
+                  <span style={{ color: '#666', fontSize: '0.9rem' }}>
+                    Est: {(task.estimatedTime / 60).toFixed(1)}h
+                  </span>
+                )}
+                {task.actualTime && (
+                  <span style={{ color: '#1976d2', fontSize: '0.9rem', fontWeight: 500 }}>
+                    Actual: {(task.actualTime / 60).toFixed(1)}h
+                  </span>
+                )}
                 {task.PersonalProject && (
                   <Link to={`/personal-projects/${task.PersonalProject.id}`} style={{ color: task.PersonalProject.color || '#1890ff', fontSize: '0.95rem', textDecoration: 'none' }}>
                     Project: {task.PersonalProject.title}
@@ -428,6 +469,17 @@ const PersonalTasks = () => {
       )}
 
       {isModalOpen && <TaskModal task={currentTask} onClose={() => setIsModalOpen(false)} onSave={handleSaveTask} />}
+
+      {showActualTimeModal && (
+        <ActualTimeModal
+          task={taskToComplete}
+          onClose={() => {
+            setShowActualTimeModal(false)
+            setTaskToComplete(null)
+          }}
+          onComplete={handleCompleteTask}
+        />
+      )}
 
       {deleteConfirm.open && (
         <div className="modal-overlay">

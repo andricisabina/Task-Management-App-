@@ -161,6 +161,18 @@ const TaskDetailsModal = ({ taskId, type, onClose, onTaskChange }) => {
               <Clock size={16} />
               <span>Created: {formatDate(task.createdAt)}</span>
             </div>
+            {task.estimatedTime && (
+              <div className="meta-item">
+                <Clock size={16} />
+                <span>Estimated Time: {(task.estimatedTime / 60).toFixed(1)} hours</span>
+              </div>
+            )}
+            {task.actualTime && (
+              <div className="meta-item">
+                <Clock size={16} />
+                <span>Actual Time: {(task.actualTime / 60).toFixed(1)} hours</span>
+              </div>
+            )}
             {task.assignedTo && (
               <div className="meta-item">
                 <Users size={16} />

@@ -23,6 +23,7 @@ import {
 } from "react-feather"
 import { toast } from "react-toastify"
 import TaskModal from "../../components/tasks/TaskModal"
+import ActualTimeModal from "../../components/tasks/ActualTimeModal"
 import { projectsApi, tasksApi } from "../../services/api"
 import "./ProjectDetails.css"
 import ReactDOM from "react-dom"
@@ -72,6 +73,8 @@ const ProfessionalProjectDetails = () => {
   const [deleteTaskConfirm, setDeleteTaskConfirm] = useState({ open: false, taskId: null })
   const [deleteProjectConfirm, setDeleteProjectConfirm] = useState(false)
   const [projectStats, setProjectStats] = useState(null)
+  const [showActualTimeModal, setShowActualTimeModal] = useState(false)
+  const [taskToComplete, setTaskToComplete] = useState(null)
 
   const statusOptions = [
     { value: 'todo', label: 'To Do' },
@@ -206,6 +209,14 @@ const ProfessionalProjectDetails = () => {
       console.log('handleStatusUpdate called', { taskId, newStatus });
       const taskToUpdate = tasks.find((task) => task.id === taskId)
       if (!taskToUpdate) return
+      
+      // If completing a task, show the actual time modal
+      if (newStatus === 'completed') {
+        setTaskToComplete(taskToUpdate)
+        setShowActualTimeModal(true)
+        return
+      }
+      
       let statusToSet = newStatus
       if (newStatus === 'accepted') statusToSet = 'to do'
       const payload = { ...taskToUpdate, status: statusToSet }
@@ -213,6 +224,28 @@ const ProfessionalProjectDetails = () => {
       const response = await tasksApi.updateProfessionalTask(taskId, payload)
       setTasks(tasks.map((task) => (task.id === taskId ? response.data : task)))
       toast.success("Task status updated")
+      await fetchProjectDetails()
+      await fetchNotifications()
+    } catch (err) {
+      toast.error(err.message)
+    }
+  }
+
+  const handleCompleteTask = async (actualTimeInMinutes) => {
+    try {
+      const taskToUpdate = taskToComplete
+      const payload = { 
+        ...taskToUpdate, 
+        status: 'completed',
+        actualTime: actualTimeInMinutes,
+        completedAt: new Date().toISOString()
+      }
+      
+      const response = await tasksApi.updateProfessionalTask(taskToComplete.id, payload)
+      setTasks(tasks.map((task) => (task.id === taskToComplete.id ? response.data : task)))
+      toast.success("Task completed successfully")
+      setShowActualTimeModal(false)
+      setTaskToComplete(null)
       await fetchProjectDetails()
       await fetchNotifications()
     } catch (err) {
@@ -702,6 +735,16 @@ const ProfessionalProjectDetails = () => {
                               Due: {`${formatDate(task.dueDate)} ${formatTime(task.dueDate)}`}
                             </span>
                           )}
+                          {task.estimatedTime && (
+                            <span className="estimated-time" style={{ color: '#666', fontSize: '0.9rem' }}>
+                              Est: {(task.estimatedTime / 60).toFixed(1)}h
+                            </span>
+                          )}
+                          {task.actualTime && (
+                            <span className="actual-time" style={{ color: '#1976d2', fontSize: '0.9rem', fontWeight: 500 }}>
+                              Actual: {(task.actualTime / 60).toFixed(1)}h
+                            </span>
+                          )}
                         </div>
                         <div className="task-actions-bar" style={{ display: 'flex', gap: 12, marginTop: 12 }}>
                           <button
@@ -874,6 +917,16 @@ const ProfessionalProjectDetails = () => {
                     {task.dueDate && (
                       <span className="due-date">
                         Due: {`${formatDate(task.dueDate)} ${formatTime(task.dueDate)}`}
+                      </span>
+                    )}
+                    {task.estimatedTime && (
+                      <span className="estimated-time" style={{ color: '#666', fontSize: '0.9rem' }}>
+                        Est: {(task.estimatedTime / 60).toFixed(1)}h
+                      </span>
+                    )}
+                    {task.actualTime && (
+                      <span className="actual-time" style={{ color: '#1976d2', fontSize: '0.9rem', fontWeight: 500 }}>
+                        Actual: {(task.actualTime / 60).toFixed(1)}h
                       </span>
                     )}
                   </div>
@@ -1135,6 +1188,17 @@ const ProfessionalProjectDetails = () => {
           onSave={handleSaveTask}
           departments={modalDepartments}
           type="professional"
+        />
+      )}
+
+      {showActualTimeModal && (
+        <ActualTimeModal
+          task={taskToComplete}
+          onClose={() => {
+            setShowActualTimeModal(false)
+            setTaskToComplete(null)
+          }}
+          onComplete={handleCompleteTask}
         />
       )}
 

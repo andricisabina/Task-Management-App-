@@ -18,6 +18,7 @@ import {
 } from "react-feather"
 import { toast } from "react-toastify"
 import TaskModal from "../../components/tasks/TaskModal"
+import ActualTimeModal from "../../components/tasks/ActualTimeModal"
 import { projectsApi, tasksApi } from "../../services/api"
 import "./ProjectDetails.css"
 import { useAuth } from "../../context/AuthContext"
@@ -52,6 +53,8 @@ const PersonalProjectDetails = () => {
     { value: 'cancelled', label: 'Cancelled' },
   ];
   const [deleteProjectConfirm, setDeleteProjectConfirm] = useState(false);
+  const [showActualTimeModal, setShowActualTimeModal] = useState(false)
+  const [taskToComplete, setTaskToComplete] = useState(null)
 
   const statusOrder = {
     'todo': 1,
@@ -160,6 +163,14 @@ const PersonalProjectDetails = () => {
         console.log('Task not found');
         return
       }
+      
+      // If completing a task, show the actual time modal
+      if (newStatus === 'completed') {
+        setTaskToComplete(taskToUpdate)
+        setShowActualTimeModal(true)
+        return
+      }
+      
       console.log('Updating task:', taskToUpdate)
       const response = await tasksApi.updatePersonalTask(taskId, { 
         ...taskToUpdate, 
@@ -172,6 +183,28 @@ const PersonalProjectDetails = () => {
       await fetchNotifications()
     } catch (err) {
       console.error('Error updating status:', err)
+      toast.error(err.message)
+    }
+  }
+
+  const handleCompleteTask = async (actualTimeInMinutes) => {
+    try {
+      const taskToUpdate = taskToComplete
+      const payload = { 
+        ...taskToUpdate, 
+        status: 'completed',
+        actualTime: actualTimeInMinutes,
+        completedAt: new Date().toISOString()
+      }
+      
+      const response = await tasksApi.updatePersonalTask(taskToComplete.id, payload)
+      setTasks(tasks.map((task) => (task.id === taskToComplete.id ? response.data : task)))
+      toast.success("Task completed successfully")
+      setShowActualTimeModal(false)
+      setTaskToComplete(null)
+      await fetchProjectStats()
+      await fetchNotifications()
+    } catch (err) {
       toast.error(err.message)
     }
   }
@@ -397,6 +430,16 @@ const PersonalProjectDetails = () => {
                   <span style={{ color: '#888', fontSize: '0.95rem' }}>
                     Due: {task.dueDate ? new Date(task.dueDate).toLocaleString() : 'N/A'}
                   </span>
+                  {task.estimatedTime && (
+                    <span style={{ color: '#666', fontSize: '0.9rem' }}>
+                      Est: {(task.estimatedTime / 60).toFixed(1)}h
+                    </span>
+                  )}
+                  {task.actualTime && (
+                    <span style={{ color: '#1976d2', fontSize: '0.9rem', fontWeight: 500 }}>
+                      Actual: {(task.actualTime / 60).toFixed(1)}h
+                    </span>
+                  )}
                 </div>
                 <div style={{ color: '#555', fontSize: '1rem', marginBottom: 8, maxWidth: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                   {task.description}
@@ -478,6 +521,17 @@ const PersonalProjectDetails = () => {
           onClose={() => setIsModalOpen(false)}
           onSave={handleSaveTask}
           type="personal"
+        />
+      )}
+
+      {showActualTimeModal && (
+        <ActualTimeModal
+          task={taskToComplete}
+          onClose={() => {
+            setShowActualTimeModal(false)
+            setTaskToComplete(null)
+          }}
+          onComplete={handleCompleteTask}
         />
       )}
 
