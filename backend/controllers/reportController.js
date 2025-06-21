@@ -1,4 +1,4 @@
-const { PersonalTask, ProfessionalTask, User, Project, Department, PersonalProject, ProfessionalProject } = require('../models');
+const { PersonalTask, ProfessionalTask, User, Department, PersonalProject, ProfessionalProject, ProjectMember } = require('../models');
 const { generateCSV } = require('../utils/generateReportCSV');
 const { generateExcel } = require('../utils/generateReportExcel');
 const { Op } = require('sequelize');
@@ -13,10 +13,17 @@ const getReportData = async (req, res) => {
       format = 'csv'
     } = req.query;
 
-    // Build base query
+    // Build base query with proper date filtering
     const whereClause = {};
-    if (startDate) whereClause.dueDate = { [Op.gte]: startDate };
-    if (endDate) whereClause.dueDate = { [Op.lte]: endDate };
+    if (startDate) {
+      whereClause.createdAt = { [Op.gte]: new Date(startDate) };
+    }
+    if (endDate) {
+      whereClause.createdAt = { 
+        ...whereClause.createdAt,
+        [Op.lte]: new Date(endDate) 
+      };
+    }
 
     let tasks;
     let insights = {};
@@ -24,110 +31,129 @@ const getReportData = async (req, res) => {
     // Fetch data based on scope
     switch (scope) {
       case 'personal_tasks':
+        // Get all personal tasks for the current user
         tasks = await PersonalTask.findAll({
-          where: { ...whereClause, userId: req.user.id },
-          include: [{ model: User, attributes: ['name'] }]
-        });
-        // KPIs
-        const completedTasksArr = tasks.filter(t => t.status === 'completed' && t.completedAt && t.startDate);
-        const kpis = {
-          completionRate: (tasks.filter(t => t.status === 'completed').length / tasks.length * 100) || 0,
-          overdueTasks: tasks.filter(t => {
-            const isOverdue = new Date(t.dueDate) < new Date();
-            return t.status !== 'completed' && isOverdue;
-          }).length,
-          averageDuration: completedTasksArr.length
-            ? completedTasksArr.reduce((acc, t) => acc + (new Date(t.completedAt) - new Date(t.startDate)), 0) / completedTasksArr.length
-            : 0,
-          totalTasks: tasks.length
-        };
-        // Charts
-        // 1. Status Distribution (Pie)
-        const statusDistribution = {
-          labels: ['Completed', 'In Progress', 'Pending', 'Overdue'],
-          datasets: [{
-            data: [
-              tasks.filter(t => t.status === 'completed').length,
-              tasks.filter(t => t.status === 'in_progress').length,
-              tasks.filter(t => t.status === 'pending').length,
-              tasks.filter(t => {
-                const isOverdue = new Date(t.dueDate) < new Date();
-                return t.status !== 'completed' && isOverdue;
-              }).length
-            ],
-            backgroundColor: ['#4CAF50', '#2196F3', '#FFC107', '#F44336']
-          }]
-        };
-        // 2. Completed Per Day (Line)
-        const completedPerDayMap = {};
-        completedTasksArr.forEach(t => {
-          const day = new Date(t.completedAt).toISOString().slice(0, 10);
-          completedPerDayMap[day] = (completedPerDayMap[day] || 0) + 1;
-        });
-        const completedPerDay = {
-          labels: Object.keys(completedPerDayMap).sort(),
-          datasets: [{
-            label: 'Tasks Completed',
-            data: Object.keys(completedPerDayMap).sort().map(day => completedPerDayMap[day]),
-            fill: false,
-            borderColor: '#4CAF50',
-            tension: 0.1
-          }]
-        };
-        // 3. Estimated vs Actual Duration (Bar)
-        const estimatedVsActual = {
-          labels: completedTasksArr.map(t => t.title),
-          datasets: [
-            {
-              label: 'Estimated (days)',
-              data: completedTasksArr.map(t => t.estimatedDuration ? t.estimatedDuration : 0),
-              backgroundColor: '#FFC107'
+          where: { 
+            ...whereClause, 
+            userId: req.user.id 
+          },
+          include: [
+            { 
+              model: User, 
+              attributes: ['name', 'email'] 
             },
             {
-              label: 'Actual (days)',
-              data: completedTasksArr.map(t => {
-                const duration = (new Date(t.completedAt) - new Date(t.startDate)) / (1000 * 60 * 60 * 24);
-                return Number.isFinite(duration) ? duration : 0;
-              }),
-              backgroundColor: '#2196F3'
+              model: PersonalProject,
+              attributes: ['title', 'description'],
+              required: false // LEFT JOIN to include tasks without projects
             }
-          ]
-        };
-        // Insights
-        let onTimeCount = 0;
-        let dayCounts = {};
-        completedTasksArr.forEach(t => {
-          if (t.completedAt && t.dueDate && new Date(t.completedAt) <= new Date(t.dueDate)) onTimeCount++;
-          const day = t.completedAt ? new Date(t.completedAt).toISOString().slice(0, 10) : null;
-          if (day) dayCounts[day] = (dayCounts[day] || 0) + 1;
+          ],
+          order: [['createdAt', 'DESC']]
         });
-        const onTimeCompletionRate = completedTasksArr.length ? (onTimeCount / completedTasksArr.length) * 100 : 0;
-        const mostProductiveDay = Object.entries(dayCounts).sort((a, b) => b[1] - a[1])[0]?.[0] || null;
-        const insightMessages = [];
-        if (completedTasksArr.length > 0) {
-          insightMessages.push(`You completed tasks on time in ${onTimeCompletionRate.toFixed(0)}% of cases.`);
+
+        // Calculate KPIs
+        const completedTasks = tasks.filter(t => t.status === 'completed');
+        const overdueTasks = tasks.filter(t => {
+          if (!t.dueDate || t.status === 'completed') return false;
+          return new Date(t.dueDate) < new Date();
+        });
+
+        const kpis = {
+          totalTasks: tasks.length,
+          completedTasks: completedTasks.length,
+          completionRate: tasks.length > 0 ? (completedTasks.length / tasks.length * 100) : 0,
+          overdueCount: overdueTasks.length,
+          averageDuration: 0
+        };
+
+        // Calculate average duration for completed tasks
+        const completedWithDuration = completedTasks.filter(t => t.completedAt && t.createdAt);
+        if (completedWithDuration.length > 0) {
+          const totalDuration = completedWithDuration.reduce((acc, t) => {
+            return acc + (new Date(t.completedAt) - new Date(t.createdAt));
+          }, 0);
+          kpis.averageDuration = totalDuration / completedWithDuration.length / (1000 * 60 * 60 * 24); // Convert to days
         }
-        if (mostProductiveDay) {
-          insightMessages.push(`Most productive day: ${new Date(mostProductiveDay).toLocaleDateString()}.`);
-        }
-        if (insightMessages.length === 0) {
-          insightMessages.push('No on-time completions or notable productivity trends for this period.');
-        }
+
+        // Status distribution chart
+        const statusCounts = {
+          'todo': tasks.filter(t => t.status === 'todo').length,
+          'in-progress': tasks.filter(t => t.status === 'in-progress').length,
+          'completed': completedTasks.length,
+          'on-hold': tasks.filter(t => t.status === 'on-hold').length,
+          'cancelled': tasks.filter(t => t.status === 'cancelled').length
+        };
+
+        const statusDistribution = {
+          labels: Object.keys(statusCounts).map(status => status.replace('-', ' ').toUpperCase()),
+          datasets: [{
+            data: Object.values(statusCounts),
+            backgroundColor: ['#FFC107', '#2196F3', '#4CAF50', '#FF9800', '#F44336']
+          }]
+        };
+
+        // Priority distribution
+        const priorityCounts = {
+          'low': tasks.filter(t => t.priority === 'low').length,
+          'medium': tasks.filter(t => t.priority === 'medium').length,
+          'high': tasks.filter(t => t.priority === 'high').length,
+          'urgent': tasks.filter(t => t.priority === 'urgent').length
+        };
+
+        const priorityDistribution = {
+          labels: Object.keys(priorityCounts).map(p => p.toUpperCase()),
+          datasets: [{
+            label: 'Tasks by Priority',
+            data: Object.values(priorityCounts),
+            backgroundColor: ['#4CAF50', '#2196F3', '#FF9800', '#F44336']
+          }]
+        };
+
+        // Tasks per project (for tasks that belong to projects)
+        const projectTasks = tasks.filter(t => t.projectId);
+        const projectCounts = {};
+        projectTasks.forEach(task => {
+          const projectName = task.PersonalProject?.title || 'Unknown Project';
+          projectCounts[projectName] = (projectCounts[projectName] || 0) + 1;
+        });
+
+        const projectDistribution = {
+          labels: Object.keys(projectCounts),
+          datasets: [{
+            label: 'Tasks per Project',
+            data: Object.values(projectCounts),
+            backgroundColor: '#2196F3'
+          }]
+        };
+
         if (format === 'json') {
           return res.json({
-            type: 'my_tasks',
+            type: 'personal_tasks',
             kpis,
             charts: {
               statusDistribution,
-              completedPerDay,
-              estimatedVsActual
+              priorityDistribution,
+              projectDistribution
             },
             insights: {
-              onTimeCompletionRate,
-              mostProductiveDay,
-              insightMessages
+              totalTasks: kpis.totalTasks,
+              completedTasks: kpis.completedTasks,
+              overdueCount: kpis.overdueCount,
+              completionRate: kpis.completionRate,
+              averageDuration: kpis.averageDuration
             },
-            tasks
+            tasks: tasks.map(task => ({
+              id: task.id,
+              title: task.title,
+              status: task.status,
+              priority: task.priority,
+              dueDate: task.dueDate,
+              completedAt: task.completedAt,
+              estimatedTime: task.estimatedTime,
+              actualTime: task.actualTime,
+              project: task.PersonalProject?.title || null,
+              createdAt: task.createdAt
+            }))
           });
         }
         break;
@@ -136,87 +162,91 @@ const getReportData = async (req, res) => {
         if (!projectId) {
           return res.status(400).json({ error: 'Project ID is required for personal project reports' });
         }
-        tasks = await PersonalTask.findAll({
-          where: { ...whereClause, projectId },
-          include: [
-            { model: User, attributes: ['name'] },
-            { model: PersonalProject, attributes: ['title'] }
-          ]
+
+        // Verify user owns this project
+        const project = await PersonalProject.findOne({
+          where: { id: projectId, userId: req.user.id }
         });
-        // KPIs
-        const totalProjects = 1;
-        const projectCompleted = tasks.length > 0 && tasks.every(t => t.status === 'completed');
-        const avgTasksPerProject = tasks.length;
-        const completedTasksArrPP = tasks.filter(t => t.status === 'completed' && t.completedAt && t.startDate);
-        const avgProjectDuration = completedTasksArrPP.length
-          ? completedTasksArrPP.reduce((acc, t) => acc + (new Date(t.completedAt) - new Date(t.startDate)), 0) / completedTasksArrPP.length
-          : 0;
-        const kpisPersonalProject = {
-          totalProjects,
-          projectCompleted,
-          avgTasksPerProject,
-          avgProjectDuration
+
+        if (!project) {
+          return res.status(404).json({ error: 'Project not found or access denied' });
+        }
+
+        tasks = await PersonalTask.findAll({
+          where: { 
+            ...whereClause, 
+            projectId: projectId 
+          },
+          include: [
+            { 
+              model: User, 
+              attributes: ['name', 'email'] 
+            },
+            {
+              model: PersonalProject,
+              attributes: ['title', 'description']
+            }
+          ],
+          order: [['createdAt', 'DESC']]
+        });
+
+        const projectCompletedTasks = tasks.filter(t => t.status === 'completed');
+        const projectOverdueTasks = tasks.filter(t => {
+          if (!t.dueDate || t.status === 'completed') return false;
+          return new Date(t.dueDate) < new Date();
+        });
+
+        const projectKpis = {
+          totalTasks: tasks.length,
+          completedTasks: projectCompletedTasks.length,
+          completionRate: tasks.length > 0 ? (projectCompletedTasks.length / tasks.length * 100) : 0,
+          overdueCount: projectOverdueTasks.length,
+          projectTitle: project.title,
+          projectCompleted: tasks.length > 0 && tasks.every(t => t.status === 'completed')
         };
-        // Charts
-        // 1. Project Completion % (Bar)
-        const completionPercent = tasks.length > 0 ? (tasks.filter(t => t.status === 'completed').length / tasks.length) * 100 : 0;
-        const projectCompletionBar = {
-          labels: ['Completion %'],
+
+        // Project status distribution
+        const projectStatusCounts = {
+          'todo': tasks.filter(t => t.status === 'todo').length,
+          'in-progress': tasks.filter(t => t.status === 'in-progress').length,
+          'completed': projectCompletedTasks.length,
+          'on-hold': tasks.filter(t => t.status === 'on-hold').length,
+          'cancelled': tasks.filter(t => t.status === 'cancelled').length
+        };
+
+        const projectStatusDistribution = {
+          labels: Object.keys(projectStatusCounts).map(status => status.replace('-', ' ').toUpperCase()),
           datasets: [{
-            label: 'Project Completion',
-            data: [completionPercent],
-            backgroundColor: '#4CAF50'
+            data: Object.values(projectStatusCounts),
+            backgroundColor: ['#FFC107', '#2196F3', '#4CAF50', '#FF9800', '#F44336']
           }]
         };
-        // 2. Task Status per Project (Stacked Bar)
-        const statusCounts = { completed: 0, in_progress: 0, pending: 0, overdue: 0 };
-        tasks.forEach(t => {
-          if (t.status === 'completed') statusCounts.completed++;
-          else if (t.status === 'in_progress') statusCounts.in_progress++;
-          else if (t.status === 'pending' || t.status === 'todo') statusCounts.pending++;
-          else if (t.dueDate && new Date(t.dueDate) < new Date() && t.status !== 'completed') statusCounts.overdue++;
-        });
-        const taskStatusStacked = {
-          labels: ['Tasks'],
-          datasets: [
-            { label: 'Completed', data: [statusCounts.completed], backgroundColor: '#4CAF50' },
-            { label: 'In Progress', data: [statusCounts.in_progress], backgroundColor: '#2196F3' },
-            { label: 'Pending', data: [statusCounts.pending], backgroundColor: '#FFC107' },
-            { label: 'Overdue', data: [statusCounts.overdue], backgroundColor: '#F44336' }
-          ]
-        };
-        // 3. Gantt-style project timelines (as data)
-        const ganttData = tasks.map(t => ({
-          label: t.title,
-          start: t.startDate,
-          end: t.completedAt || t.dueDate
-        }));
-        // Insights
-        const projectsCompleted = tasks.length > 0 && tasks.every(t => t.status === 'completed');
-        const timeSpent = completedTasksArrPP.length
-          ? completedTasksArrPP.reduce((acc, t) => acc + (new Date(t.completedAt) - new Date(t.startDate)), 0) / completedTasksArrPP.length
-          : 0;
-        const insightMessagesPP = [];
-        if (projectsCompleted) {
-          insightMessagesPP.push('This project was completed.');
-        } else {
-          insightMessagesPP.push('This project is ongoing.');
-        }
+
         if (format === 'json') {
           return res.json({
-            type: 'my_projects',
-            kpis: kpisPersonalProject,
+            type: 'personal_project',
+            kpis: projectKpis,
             charts: {
-              projectCompletionBar,
-              taskStatusStacked,
-              ganttData
+              statusDistribution: projectStatusDistribution
             },
             insights: {
-              projectsCompleted,
-              timeSpent,
-              insightMessages: insightMessagesPP
+              totalTasks: projectKpis.totalTasks,
+              completedTasks: projectKpis.completedTasks,
+              overdueCount: projectKpis.overdueCount,
+              completionRate: projectKpis.completionRate,
+              projectCompleted: projectKpis.projectCompleted
             },
-            tasks
+            tasks: tasks.map(task => ({
+              id: task.id,
+              title: task.title,
+              status: task.status,
+              priority: task.priority,
+              dueDate: task.dueDate,
+              completedAt: task.completedAt,
+              estimatedTime: task.estimatedTime,
+              actualTime: task.actualTime,
+              createdAt: task.createdAt
+            }))
           });
         }
         break;
@@ -225,47 +255,86 @@ const getReportData = async (req, res) => {
         if (!projectId) {
           return res.status(400).json({ error: 'Project ID is required for professional project reports' });
         }
-        tasks = await ProfessionalTask.findAll({
-          where: { ...whereClause, projectId },
-          include: [
-            { model: User, as: 'assignedTo', attributes: ['name'] },
-            { 
-              model: ProfessionalProject, 
-              attributes: ['title'],
-              include: [
-                { model: Department, as: 'departments', attributes: ['name'], through: { attributes: [] } }
-              ]
-            }
-          ]
+
+        // Check if user has access to this project
+        const projectMember = await ProjectMember.findOne({
+          where: { 
+            projectId: projectId, 
+            userId: req.user.id,
+            status: 'accepted'
+          }
         });
-        // KPIs
-        const teamMembers = Array.from(new Set(tasks.map(t => t.assignedTo?.name).filter(Boolean)));
-        // Department extraction via task.departmentId
-        // Build a map of departmentId to department name from the project
-        const projectDepartments = (tasks[0]?.ProfessionalProject?.departments || []).reduce((acc, d) => {
-          acc[d.id] = d.name;
-          return acc;
-        }, {});
-        const departmentCounts = tasks.reduce((acc, t) => {
-          const deptId = t.departmentId;
-          const deptName = deptId ? (projectDepartments[deptId] || `Dept ${deptId}`) : 'No Department';
-          acc[deptName] = (acc[deptName] || 0) + 1;
-          return acc;
-        }, {});
-        const mostActiveDepartment = Object.entries(departmentCounts).sort((a, b) => b[1] - a[1])[0]?.[0] || 'None';
-        const taskRejections = tasks.filter(t => t.status === 'rejected').length;
-        const acceptanceTimes = tasks.filter(t => t.acceptedAt && t.createdAt).map(t => new Date(t.acceptedAt) - new Date(t.createdAt));
-        const avgAcceptanceTime = acceptanceTimes.length ? acceptanceTimes.reduce((a, b) => a + b, 0) / acceptanceTimes.length : 0;
-        const kpisTeam = {
-          totalTeamProjects: 1, // since this is for a single project
-          teamMembers: teamMembers.length,
-          mostActiveDepartment,
-          taskRejections,
-          avgAcceptanceTime: avgAcceptanceTime / (1000 * 60 * 60 * 24) // in days
+
+        if (!projectMember && !['admin', 'project_manager'].includes(req.user.role)) {
+          return res.status(403).json({ error: 'Access denied to this project' });
+        }
+
+        tasks = await ProfessionalTask.findAll({
+          where: { 
+            ...whereClause, 
+            projectId: projectId 
+          },
+          include: [
+            { 
+              model: User, 
+              as: 'assignedTo',
+              attributes: ['name', 'email'] 
+            },
+            {
+              model: ProfessionalProject,
+              attributes: ['title', 'description']
+            },
+            {
+              model: Department,
+              attributes: ['name', 'color']
+            }
+          ],
+          order: [['createdAt', 'DESC']]
+        });
+
+        const teamCompletedTasks = tasks.filter(t => t.status === 'completed');
+        const teamOverdueTasks = tasks.filter(t => {
+          if (!t.dueDate || t.status === 'completed') return false;
+          return new Date(t.dueDate) < new Date();
+        });
+
+        const teamKpis = {
+          totalTasks: tasks.length,
+          completedTasks: teamCompletedTasks.length,
+          completionRate: tasks.length > 0 ? (teamCompletedTasks.length / tasks.length * 100) : 0,
+          overdueCount: teamOverdueTasks.length,
+          rejectedTasks: tasks.filter(t => t.status === 'rejected').length,
+          teamMembers: new Set(tasks.map(t => t.assignedToId).filter(Boolean)).size
         };
-        // Charts
-        // 1. Tasks per Department (Bar)
-        const tasksPerDept = {
+
+        // Team status distribution
+        const teamStatusCounts = {
+          'pending': tasks.filter(t => t.status === 'pending').length,
+          'todo': tasks.filter(t => t.status === 'todo').length,
+          'in-progress': tasks.filter(t => t.status === 'in-progress').length,
+          'review': tasks.filter(t => t.status === 'review').length,
+          'completed': teamCompletedTasks.length,
+          'rejected': tasks.filter(t => t.status === 'rejected').length,
+          'on-hold': tasks.filter(t => t.status === 'on-hold').length,
+          'cancelled': tasks.filter(t => t.status === 'cancelled').length
+        };
+
+        const teamStatusDistribution = {
+          labels: Object.keys(teamStatusCounts).map(status => status.replace('-', ' ').toUpperCase()),
+          datasets: [{
+            data: Object.values(teamStatusCounts),
+            backgroundColor: ['#9E9E9E', '#FFC107', '#2196F3', '#FF9800', '#4CAF50', '#F44336', '#795548', '#607D8B']
+          }]
+        };
+
+        // Tasks per department
+        const departmentCounts = {};
+        tasks.forEach(task => {
+          const deptName = task.Department?.name || 'No Department';
+          departmentCounts[deptName] = (departmentCounts[deptName] || 0) + 1;
+        });
+
+        const departmentDistribution = {
           labels: Object.keys(departmentCounts),
           datasets: [{
             label: 'Tasks per Department',
@@ -273,188 +342,178 @@ const getReportData = async (req, res) => {
             backgroundColor: '#2196F3'
           }]
         };
-        // 2. Task Status by Department (Stacked Bar)
-        const deptStatusMap = {};
-        tasks.forEach(t => {
-          const deptId = t.departmentId;
-          const deptName = deptId ? (projectDepartments[deptId] || `Dept ${deptId}`) : 'No Department';
-          if (!deptStatusMap[deptName]) deptStatusMap[deptName] = { completed: 0, in_progress: 0, pending: 0, rejected: 0 };
-          deptStatusMap[deptName][t.status] = (deptStatusMap[deptName][t.status] || 0) + 1;
+
+        // Tasks per user
+        const userCounts = {};
+        tasks.forEach(task => {
+          const userName = task.assignedTo?.name || 'Unassigned';
+          userCounts[userName] = (userCounts[userName] || 0) + 1;
         });
-        const taskStatusByDept = {
-          labels: Object.keys(deptStatusMap),
-          datasets: [
-            {
-              label: 'Completed',
-              data: Object.values(deptStatusMap).map(s => s.completed || 0),
-              backgroundColor: '#4CAF50'
-            },
-            {
-              label: 'In Progress',
-              data: Object.values(deptStatusMap).map(s => s.in_progress || 0),
-              backgroundColor: '#2196F3'
-            },
-            {
-              label: 'Pending',
-              data: Object.values(deptStatusMap).map(s => s.pending || 0),
-              backgroundColor: '#FFC107'
-            },
-            {
-              label: 'Rejected',
-              data: Object.values(deptStatusMap).map(s => s.rejected || 0),
-              backgroundColor: '#F44336'
-            }
-          ]
-        };
-        // 3. Tasks per User (Bar)
-        const userCounts = tasks.reduce((acc, t) => {
-          const user = t.assignedTo?.name || 'Unassigned';
-          acc[user] = (acc[user] || 0) + 1;
-          return acc;
-        }, {});
-        const tasksPerUser = {
+
+        const userDistribution = {
           labels: Object.keys(userCounts),
           datasets: [{
             label: 'Tasks per User',
             data: Object.values(userCounts),
-            backgroundColor: '#FFC107'
+            backgroundColor: '#FF9800'
           }]
         };
-        // Insights
-        const percentRejected = tasks.length ? (tasks.filter(t => t.status === 'rejected').length / tasks.length) * 100 : 0;
-        // Department completion rates
-        const departmentCompletionRates = {};
-        Object.keys(departmentCounts).forEach(dept => {
-          const deptTasks = tasks.filter(t => {
-            const deptId = t.departmentId;
-            const deptName = deptId ? (projectDepartments[deptId] || `Dept ${deptId}`) : 'No Department';
-            return deptName === dept;
-          });
-          const completed = deptTasks.filter(t => t.status === 'completed').length;
-          departmentCompletionRates[dept] = deptTasks.length ? (completed / deptTasks.length) * 100 : 0;
-        });
-        // Fastest acceptance user
-        const userAcceptanceTimes = {};
-        tasks.forEach(t => {
-          if (t.acceptedAt && t.createdAt && t.assignedTo?.name) {
-            const diff = new Date(t.acceptedAt) - new Date(t.createdAt);
-            if (!userAcceptanceTimes[t.assignedTo.name]) userAcceptanceTimes[t.assignedTo.name] = [];
-            userAcceptanceTimes[t.assignedTo.name].push(diff);
-          }
-        });
-        let fastestAcceptanceUser = null;
-        let fastestTime = null;
-        Object.entries(userAcceptanceTimes).forEach(([user, times]) => {
-          const avg = times.reduce((a, b) => a + b, 0) / times.length;
-          if (fastestTime === null || avg < fastestTime) {
-            fastestTime = avg;
-            fastestAcceptanceUser = user;
-          }
-        });
-        const insightMessagesTeam = [];
-        Object.entries(departmentCompletionRates).forEach(([dept, rate]) => {
-          if (dept !== 'No Department') {
-            insightMessagesTeam.push(`${dept} completed ${rate.toFixed(0)}% of their assigned tasks.`);
-          }
-        });
-        if (fastestAcceptanceUser && fastestTime !== null) {
-          insightMessagesTeam.push(`${fastestAcceptanceUser} has the fastest average task acceptance time (${(fastestTime / (1000 * 60 * 60)).toFixed(1)}h).`);
-        }
-        if (percentRejected > 0) {
-          insightMessagesTeam.push(`${percentRejected.toFixed(1)}% of tasks were rejected.`);
-        }
+
         if (format === 'json') {
           return res.json({
-            type: 'team_projects',
-            kpis: kpisTeam,
+            type: 'professional_project',
+            kpis: teamKpis,
             charts: {
-              tasksPerDept,
-              taskStatusByDept,
-              tasksPerUser
+              statusDistribution: teamStatusDistribution,
+              departmentDistribution,
+              userDistribution
             },
             insights: {
-              percentRejected,
-              departmentCompletionRates,
-              fastestAcceptanceUser,
-              fastestTime,
-              insightMessages: insightMessagesTeam
+              totalTasks: teamKpis.totalTasks,
+              completedTasks: teamKpis.completedTasks,
+              overdueCount: teamKpis.overdueCount,
+              completionRate: teamKpis.completionRate,
+              rejectedTasks: teamKpis.rejectedTasks,
+              teamMembers: teamKpis.teamMembers
             },
-            tasks
+            tasks: tasks.map(task => ({
+              id: task.id,
+              title: task.title,
+              status: task.status,
+              priority: task.priority,
+              dueDate: task.dueDate,
+              completedAt: task.completedAt,
+              estimatedTime: task.estimatedTime,
+              actualTime: task.actualTime,
+              assignedTo: task.assignedTo?.name || 'Unassigned',
+              department: task.Department?.name || 'No Department',
+              createdAt: task.createdAt
+            }))
           });
         }
         break;
 
       case 'all_professional':
+        // Only admins and project managers can see all professional projects
         if (!['admin', 'project_manager'].includes(req.user.role)) {
           return res.status(403).json({ error: 'Unauthorized to view all professional projects' });
         }
+
         tasks = await ProfessionalTask.findAll({
           where: whereClause,
           include: [
-            { model: User, as: 'assignedTo', attributes: ['name'] },
-            { model: Project, attributes: ['name'] },
-            { model: Department, attributes: ['name'] }
-          ]
+            { 
+              model: User, 
+              as: 'assignedTo',
+              attributes: ['name', 'email'] 
+            },
+            {
+              model: ProfessionalProject,
+              attributes: ['title', 'description']
+            },
+            {
+              model: Department,
+              attributes: ['name', 'color']
+            }
+          ],
+          order: [['createdAt', 'DESC']]
         });
+
+        const allCompletedTasks = tasks.filter(t => t.status === 'completed');
+        const allOverdueTasks = tasks.filter(t => {
+          if (!t.dueDate || t.status === 'completed') return false;
+          return new Date(t.dueDate) < new Date();
+        });
+
+        const allKpis = {
+          totalTasks: tasks.length,
+          completedTasks: allCompletedTasks.length,
+          completionRate: tasks.length > 0 ? (allCompletedTasks.length / tasks.length * 100) : 0,
+          overdueCount: allOverdueTasks.length,
+          rejectedTasks: tasks.filter(t => t.status === 'rejected').length,
+          totalProjects: new Set(tasks.map(t => t.projectId)).size,
+          totalUsers: new Set(tasks.map(t => t.assignedToId).filter(Boolean)).size
+        };
+
+        // Overall status distribution
+        const allStatusCounts = {
+          'pending': tasks.filter(t => t.status === 'pending').length,
+          'todo': tasks.filter(t => t.status === 'todo').length,
+          'in-progress': tasks.filter(t => t.status === 'in-progress').length,
+          'review': tasks.filter(t => t.status === 'review').length,
+          'completed': allCompletedTasks.length,
+          'rejected': tasks.filter(t => t.status === 'rejected').length,
+          'on-hold': tasks.filter(t => t.status === 'on-hold').length,
+          'cancelled': tasks.filter(t => t.status === 'cancelled').length
+        };
+
+        const allStatusDistribution = {
+          labels: Object.keys(allStatusCounts).map(status => status.replace('-', ' ').toUpperCase()),
+          datasets: [{
+            data: Object.values(allStatusCounts),
+            backgroundColor: ['#9E9E9E', '#FFC107', '#2196F3', '#FF9800', '#4CAF50', '#F44336', '#795548', '#607D8B']
+          }]
+        };
+
+        if (format === 'json') {
+          return res.json({
+            type: 'all_professional',
+            kpis: allKpis,
+            charts: {
+              statusDistribution: allStatusDistribution
+            },
+            insights: {
+              totalTasks: allKpis.totalTasks,
+              completedTasks: allKpis.completedTasks,
+              overdueCount: allKpis.overdueCount,
+              completionRate: allKpis.completionRate,
+              rejectedTasks: allKpis.rejectedTasks,
+              totalProjects: allKpis.totalProjects,
+              totalUsers: allKpis.totalUsers
+            },
+            tasks: tasks.map(task => ({
+              id: task.id,
+              title: task.title,
+              status: task.status,
+              priority: task.priority,
+              dueDate: task.dueDate,
+              completedAt: task.completedAt,
+              estimatedTime: task.estimatedTime,
+              actualTime: task.actualTime,
+              assignedTo: task.assignedTo?.name || 'Unassigned',
+              department: task.Department?.name || 'No Department',
+              project: task.ProfessionalProject?.title || 'Unknown Project',
+              createdAt: task.createdAt
+            }))
+          });
+        }
         break;
 
       default:
         return res.status(400).json({ error: 'Invalid report scope' });
     }
 
-    // Calculate insights
-    const completedTasksArr = tasks.filter(t => t.status === 'completed' && t.completedAt && t.startDate);
-    insights = {
+    // For CSV and Excel exports, use the calculated insights
+    const exportInsights = {
       totalTasks: tasks.length,
       completedTasks: tasks.filter(t => t.status === 'completed').length,
       overdueCount: tasks.filter(t => {
-        const isOverdue = new Date(t.dueDate) < new Date();
-        return t.status !== 'completed' && isOverdue;
+        if (!t.dueDate || t.status === 'completed') return false;
+        return new Date(t.dueDate) < new Date();
       }).length,
-      completionRate: (tasks.filter(t => t.status === 'completed').length / tasks.length * 100) || 0,
-      averageDuration: completedTasksArr.length
-        ? completedTasksArr.reduce((acc, t) => acc + (new Date(t.completedAt) - new Date(t.startDate)), 0) / completedTasksArr.length
-        : 0
+      completionRate: tasks.length > 0 ? (tasks.filter(t => t.status === 'completed').length / tasks.length * 100) : 0
     };
-
-    // Add department performance for professional reports
-    if (scope === 'professional_project' || scope === 'all_professional') {
-      const departmentTasks = tasks.reduce((acc, task) => {
-        const deptName = task.Department?.name || 'No Department';
-        if (!acc[deptName]) {
-          acc[deptName] = { total: 0, completed: 0 };
-        }
-        acc[deptName].total++;
-        if (task.status === 'completed') acc[deptName].completed++;
-        return acc;
-      }, {});
-
-      const userActivity = tasks.reduce((acc, task) => {
-        const userName = task.assignedTo?.name || 'Unassigned';
-        acc[userName] = (acc[userName] || 0) + 1;
-        return acc;
-      }, {});
-
-      insights.departmentPerformance = {
-        departments: Object.entries(departmentTasks).map(([name, data]) => ({
-          name,
-          completionRate: (data.completed / data.total * 100) || 0
-        })),
-        mostActiveUser: Object.entries(userActivity)
-          .sort(([, a], [, b]) => b - a)[0]?.[0] || 'None'
-      };
-    }
 
     // Generate report based on format
     if (format === 'csv') {
-      const csvContent = generateCSV({ tasks, insights, scope });
+      const csvContent = generateCSV({ tasks, insights: exportInsights, scope });
       res.setHeader('Content-Type', 'text/csv');
-      res.setHeader('Content-Disposition', `attachment; filename=report-${scope}.csv`);
+      res.setHeader('Content-Disposition', `attachment; filename=report-${scope}-${new Date().toISOString().split('T')[0]}.csv`);
       return res.send(csvContent);
     } else if (format === 'excel') {
-      const excelBuffer = await generateExcel({ tasks, insights, scope });
+      const excelBuffer = await generateExcel({ tasks, insights: exportInsights, scope });
       res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-      res.setHeader('Content-Disposition', `attachment; filename=report-${scope}.xlsx`);
+      res.setHeader('Content-Disposition', `attachment; filename=report-${scope}-${new Date().toISOString().split('T')[0]}.xlsx`);
       return res.send(excelBuffer);
     } else {
       return res.status(400).json({ error: 'Invalid format' });
