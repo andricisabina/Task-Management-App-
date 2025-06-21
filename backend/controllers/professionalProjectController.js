@@ -448,7 +448,7 @@ exports.deleteProfessionalProject = asyncHandler(async (req, res, next) => {
 // @route   POST /api/professional-projects/:id/members
 // @access  Private
 exports.addProjectMember = asyncHandler(async (req, res, next) => {
-  const { userId, departmentId } = req.body; // departmentId is optional
+  const { userId, departmentId } = req.body;
   const { id: projectId } = req.params;
   
   if (!userId) {
@@ -467,7 +467,7 @@ exports.addProjectMember = asyncHandler(async (req, res, next) => {
     return next(new ErrorResponse(`User not found with id of ${userId}`, 404));
   }
 
-  // Check if member already exists in the project
+  // Check if member already exists
   const existingMember = await ProjectMember.findOne({
     where: { userId, projectId }
   });
@@ -475,15 +475,12 @@ exports.addProjectMember = asyncHandler(async (req, res, next) => {
     return next(new ErrorResponse(`User is already a member of this project`, 400));
   }
 
-  // Authorization: manager/admin can add anyone. Department leaders can add to their department.
+  // Authorization: manager/admin or department leader for this department
   let isAuthorized = false;
-  const isManager = project.creatorId === req.user.id;
-  const isAdmin = req.user.role === 'admin';
-
-  if (isManager || isAdmin) {
+  if (project.creatorId === req.user.id || req.user.role === 'admin') {
     isAuthorized = true;
   } else if (departmentId) {
-    // Check if requester is a leader for this specific department
+    // Check if requester is leader for this department
     const leader = await ProjectMember.findOne({
       where: {
         userId: req.user.id,
@@ -495,17 +492,12 @@ exports.addProjectMember = asyncHandler(async (req, res, next) => {
     });
     if (leader) isAuthorized = true;
   }
-
   if (!isAuthorized) {
     return next(new ErrorResponse('Not authorized to add member to this department/project', 401));
   }
 
-  // Add member (with departmentId if provided, otherwise null)
-  await ProjectMember.create({ 
-    userId, 
-    projectId, 
-    departmentId: departmentId || null 
-  });
+  // Add member (with departmentId if provided)
+  await ProjectMember.create({ userId, projectId, departmentId: departmentId || null });
 
   // Fetch and return the updated project with all members and user info
   const updatedProject = await ProfessionalProject.findOne({

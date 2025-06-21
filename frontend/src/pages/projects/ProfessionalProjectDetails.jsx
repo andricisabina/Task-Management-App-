@@ -328,6 +328,22 @@ const ProfessionalProjectDetails = () => {
     }
   }
 
+  const renderCommentContent = (content) => {
+    const urlRegex = /(https?:\/\/[^\s]+)/g;
+    return content.split(urlRegex).map((part, index) => {
+      if (part.match(urlRegex) && part.match(/\.(jpeg|jpg|gif|png)$/i)) {
+        const style = {
+          maxWidth: '100%',
+          maxHeight: '300px',
+          borderRadius: '8px',
+          marginTop: '8px'
+        };
+        return <img key={index} src={part} alt="Comment image" style={style} />;
+      }
+      return part;
+    });
+  };
+
   const formatDate = (dateString) => {
     return new Date(dateString).toLocaleDateString()
   }
@@ -992,7 +1008,7 @@ const ProfessionalProjectDetails = () => {
                   <div className="comment-author-info">
                     {comment.user?.profilePhoto ? (
                       <img 
-                        src={comment.user.profilePhoto} 
+                        src={`http://localhost:5000/${comment.user.profilePhoto.replace(/\\/g, '/')}`} 
                         alt={comment.user.name} 
                         className="comment-author-avatar"
                       />
@@ -1047,7 +1063,7 @@ const ProfessionalProjectDetails = () => {
                     </div>
                   </div>
                 ) : (
-                  <p className="comment-content">{comment.content}</p>
+                  <p className="comment-content">{renderCommentContent(comment.content)}</p>
                 )}
                 {!comment.parentId && (
                   <button
@@ -1092,7 +1108,7 @@ const ProfessionalProjectDetails = () => {
                           <div className="reply-author-info">
                             {reply.user?.profilePhoto ? (
                               <img
-                                src={reply.user.profilePhoto}
+                                src={`http://localhost:5000/${reply.user.profilePhoto.replace(/\\/g, '/')}`}
                                 alt={reply.user.name}
                                 className="reply-author-avatar"
                               />
@@ -1204,14 +1220,7 @@ const ProfessionalProjectDetails = () => {
 
       {/* Project Members Section */}
       <div className="project-members card" style={{ marginBottom: 32, marginTop: 32 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <h3 style={{ marginBottom: 16 }}>Project Members</h3>
-          {project.creator && project.creator.id === currentUser.id && (
-             <button className="btn btn-primary" onClick={() => openAddMemberModal(null)}>
-               <Plus size={16} /> Add Member to Project
-             </button>
-          )}
-        </div>
+        <h3 style={{ marginBottom: 16 }}>Project Members</h3>
         {project.departments && project.departments.length > 0 && project.ProjectMembers && (
           project.departments.map(dept => {
             const deptMembers = project.ProjectMembers.filter(m => m.departmentId === dept.id);

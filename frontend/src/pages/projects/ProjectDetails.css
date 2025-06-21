@@ -412,6 +412,13 @@
     line-height: 1.5;
   }
   
+  .comment-content img {
+    max-width: 100%;
+    max-height: 200px;
+    border-radius: 8px;
+    margin-top: 8px;
+  }
+  
   .reply-btn {
     padding: 0;
     color: var(--text-secondary);
@@ -434,6 +441,58 @@
   
   .reply-item {
     padding: 0.75rem 0;
+  }
+  
+  .reply-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.5rem;
+  }
+  
+  .reply-author-info {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+  
+  .reply-author-avatar {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    object-fit: cover;
+  }
+  
+  .reply-author-avatar-placeholder {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background-color: var(--primary-color);
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 500;
+    font-size: 0.8rem;
+  }
+  
+  .reply-author {
+    font-weight: 500;
+    color: var(--text-primary);
+    font-size: 0.9rem;
+  }
+  
+  .reply-time {
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+  }
+  
+  .reply-content {
+    margin: 0.5rem 0;
+    color: var(--text-primary);
+    line-height: 1.5;
+    font-size: 0.9rem;
+    padding-left: 2.2rem;
   }
   
   .reply-form {
