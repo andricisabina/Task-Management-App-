@@ -1204,7 +1204,14 @@ const ProfessionalProjectDetails = () => {
 
       {/* Project Members Section */}
       <div className="project-members card" style={{ marginBottom: 32, marginTop: 32 }}>
-        <h3 style={{ marginBottom: 16 }}>Project Members</h3>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <h3 style={{ marginBottom: 16 }}>Project Members</h3>
+          {project.creator && project.creator.id === currentUser.id && (
+             <button className="btn btn-primary" onClick={() => openAddMemberModal(null)}>
+               <Plus size={16} /> Add Member to Project
+             </button>
+          )}
+        </div>
         {project.departments && project.departments.length > 0 && project.ProjectMembers && (
           project.departments.map(dept => {
             const deptMembers = project.ProjectMembers.filter(m => m.departmentId === dept.id);

@@ -11,12 +11,20 @@ const crypto = require('crypto');
 exports.getProfessionalProjects = asyncHandler(async (req, res, next) => {
   try {
     const userId = req.user.id;
-    // Find all projects where user is creator (manager) or assigned as leader
+
+    // Step 1: Find all project IDs where the user is a member
+    const memberInProjects = await ProjectMember.findAll({
+      where: { userId },
+      attributes: ['projectId']
+    });
+    const memberProjectIds = memberInProjects.map(p => p.projectId);
+
+    // Step 2: Find all projects where user is creator OR in the projects from step 1
     const projects = await ProfessionalProject.findAll({
       where: {
         [Op.or]: [
           { creatorId: userId },
-          { '$ProjectMembers.userId$': userId }
+          { id: { [Op.in]: memberProjectIds } }
         ]
       },
       include: [
@@ -28,17 +36,16 @@ exports.getProfessionalProjects = asyncHandler(async (req, res, next) => {
         {
           model: ProjectMember,
           as: 'ProjectMembers',
-          attributes: ['userId', 'departmentId', 'role', 'status'],
           required: false,
           include: [{ model: User, as: 'member', attributes: ['id', 'name', 'email'] }]
         },
         {
           model: Department,
           as: 'departments',
-          through: { attributes: [] },
-          attributes: ['id', 'name', 'color']
+          through: { attributes: [] }
         }
-      ]
+      ],
+      order: [['createdAt', 'DESC']]
     });
 
     res.status(200).json({
@@ -59,15 +66,8 @@ exports.getProfessionalProject = asyncHandler(async (req, res, next) => {
   const { id } = req.params;
   const userId = req.user.id;
 
-  // Only allow access if user is creator or assigned as leader
   const project = await ProfessionalProject.findOne({
-    where: {
-      id,
-      [Op.or]: [
-        { creatorId: userId },
-        { '$ProjectMembers.userId$': userId }
-      ]
-    },
+    where: { id },
     include: [
       {
         model: User,
@@ -110,14 +110,19 @@ exports.getProfessionalProject = asyncHandler(async (req, res, next) => {
     ],
     order: [[{ model: ProfessionalTask, as: 'ProfessionalTasks' }, 'dueDate', 'ASC']]
   });
-  
-  console.log('Fetched project:', project ? project.id : null);
-  console.log('Fetched project.departments:', project && project.departments ? project.departments : null);
-  
+
   if (!project) {
     return next(new ErrorResponse(`Project not found with id of ${id}`, 404));
   }
 
+  // Authorization check: user must be creator or a member
+  const isCreator = project.creatorId === userId;
+  const isMember = project.ProjectMembers.some(member => member.userId === userId);
+
+  if (!isCreator && !isMember) {
+    return next(new ErrorResponse(`You are not authorized to access this project`, 403));
+  }
+  
   // Enrich each department with leader info
   if (project.departments && project.departments.length > 0) {
     const { User } = require('../models');
@@ -443,7 +448,7 @@ exports.deleteProfessionalProject = asyncHandler(async (req, res, next) => {
 // @route   POST /api/professional-projects/:id/members
 // @access  Private
 exports.addProjectMember = asyncHandler(async (req, res, next) => {
-  const { userId, departmentId } = req.body;
+  const { userId, departmentId } = req.body; // departmentId is optional
   const { id: projectId } = req.params;
   
   if (!userId) {
@@ -462,7 +467,7 @@ exports.addProjectMember = asyncHandler(async (req, res, next) => {
     return next(new ErrorResponse(`User not found with id of ${userId}`, 404));
   }
 
-  // Check if member already exists
+  // Check if member already exists in the project
   const existingMember = await ProjectMember.findOne({
     where: { userId, projectId }
   });
@@ -470,12 +475,15 @@ exports.addProjectMember = asyncHandler(async (req, res, next) => {
     return next(new ErrorResponse(`User is already a member of this project`, 400));
   }
 
-  // Authorization: manager/admin or department leader for this department
+  // Authorization: manager/admin can add anyone. Department leaders can add to their department.
   let isAuthorized = false;
-  if (project.creatorId === req.user.id || req.user.role === 'admin') {
+  const isManager = project.creatorId === req.user.id;
+  const isAdmin = req.user.role === 'admin';
+
+  if (isManager || isAdmin) {
     isAuthorized = true;
   } else if (departmentId) {
-    // Check if requester is leader for this department
+    // Check if requester is a leader for this specific department
     const leader = await ProjectMember.findOne({
       where: {
         userId: req.user.id,
@@ -487,12 +495,17 @@ exports.addProjectMember = asyncHandler(async (req, res, next) => {
     });
     if (leader) isAuthorized = true;
   }
+
   if (!isAuthorized) {
     return next(new ErrorResponse('Not authorized to add member to this department/project', 401));
   }
 
-  // Add member (with departmentId if provided)
-  await ProjectMember.create({ userId, projectId, departmentId: departmentId || null });
+  // Add member (with departmentId if provided, otherwise null)
+  await ProjectMember.create({ 
+    userId, 
+    projectId, 
+    departmentId: departmentId || null 
+  });
 
   // Fetch and return the updated project with all members and user info
   const updatedProject = await ProfessionalProject.findOne({
