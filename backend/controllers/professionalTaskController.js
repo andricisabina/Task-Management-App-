@@ -5,6 +5,7 @@ const { Op } = require('sequelize');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
+const { createNotificationWithEmission } = require('./notificationController');
 
 // Set up multer storage for task attachments
 const storage = multer.diskStorage({
@@ -272,7 +273,7 @@ exports.createProfessionalTask = asyncHandler(async (req, res, next) => {
 
   // Create notification and send email for assigned user if applicable
   if (assignee) {
-    await Notification.create({
+    await createNotificationWithEmission({
       userId: assignee.id,
       title: 'New Task Assigned',
       message: `You have been assigned a new task: ${task.title}`,
@@ -280,7 +281,8 @@ exports.createProfessionalTask = asyncHandler(async (req, res, next) => {
       relatedId: task.id,
       relatedType: 'professional_task',
       link: `/tasks/professional/${task.id}`
-    });
+    }, req);
+    
     // Send email (assume sendEmail utility is available)
     try {
       await require('../utils/sendEmail')({
@@ -400,7 +402,7 @@ exports.updateProfessionalTask = asyncHandler(async (req, res, next) => {
           });
           // Notify project creator
           const notifications = [];
-          notifications.push(await Notification.create({
+          notifications.push(await createNotificationWithEmission({
             userId: project.creatorId,
             title: 'Project Completed',
             message: `Your professional project "${project.title}" has been marked as completed.`,
@@ -408,14 +410,12 @@ exports.updateProfessionalTask = asyncHandler(async (req, res, next) => {
             relatedId: project.id,
             relatedType: 'professional_project',
             link: `/projects/professional/${project.id}`
-          }));
-          if (io) {
-            io.to(`user_${project.creatorId}`).emit('notification', notifications[0].toJSON());
-          }
+          }, req));
+          
           // Notify all department leaders
           for (const leader of leaders) {
             if (leader.userId !== project.creatorId) { // Avoid duplicate notification if creator is also a leader
-              const notif = await Notification.create({
+              await createNotificationWithEmission({
                 userId: leader.userId,
                 title: 'Project Completed',
                 message: `The professional project "${project.title}" you lead has been marked as completed.`,
@@ -423,10 +423,7 @@ exports.updateProfessionalTask = asyncHandler(async (req, res, next) => {
                 relatedId: project.id,
                 relatedType: 'professional_project',
                 link: `/projects/professional/${project.id}`
-              });
-              if (io) {
-                io.to(`user_${leader.userId}`).emit('notification', notif.toJSON());
-              }
+              }, req);
             }
           }
         } catch (err) {
@@ -446,7 +443,7 @@ exports.updateProfessionalTask = asyncHandler(async (req, res, next) => {
 
   // If assignee is changed, notify new assignee and send email
   if (req.body.assignedToId && req.body.assignedToId !== oldAssigneeId) {
-    await Notification.create({
+    await createNotificationWithEmission({
       userId: req.body.assignedToId,
       title: 'Task Assigned to You',
       message: `You have been assigned to task: ${task.title}`,
@@ -454,7 +451,8 @@ exports.updateProfessionalTask = asyncHandler(async (req, res, next) => {
       relatedId: task.id,
       relatedType: 'professional_task',
       link: `/tasks/professional/${task.id}`
-    });
+    }, req);
+    
     // Send email on assignment
     const sendEmail = require('../utils/sendEmail');
     const user = await User.findByPk(req.body.assignedToId);
@@ -471,9 +469,8 @@ exports.updateProfessionalTask = asyncHandler(async (req, res, next) => {
   }
 
   // Notify all other involved users
-  const io = req.app.get('io');
   for (const userId of involvedUserIds) {
-    await Notification.create({
+    await createNotificationWithEmission({
       userId,
       title: 'Task Updated',
       message: `Task "${task.title}" has been updated`,
@@ -481,15 +478,7 @@ exports.updateProfessionalTask = asyncHandler(async (req, res, next) => {
       relatedId: task.id,
       relatedType: 'professional_task',
       link: `/tasks/professional/${task.id}`
-    });
-    io.to(`user_${userId}`).emit('notification', {
-      title: 'Task Updated',
-      message: `Task "${task.title}" has been updated`,
-      type: 'task_updated',
-      relatedId: task.id,
-      relatedType: 'professional_task',
-      link: `/tasks/professional/${task.id}`
-    });
+    }, req);
   }
 
   // Fetch updated task with relationships
@@ -615,9 +604,9 @@ exports.addComment = asyncHandler(async (req, res, next) => {
   if (task.ProfessionalProject && task.ProfessionalProject.creatorId) involvedUserIds.add(task.ProfessionalProject.creatorId);
   involvedUserIds.delete(req.user.id);
   const sendEmail = require('../utils/sendEmail');
-  const io = req.app.get('io');
+  
   for (const userId of involvedUserIds) {
-    await Notification.create({
+    await createNotificationWithEmission({
       userId,
       title: 'New Comment on Task',
       message: `${req.user.name} commented on task "${task.title}"`,
@@ -625,7 +614,8 @@ exports.addComment = asyncHandler(async (req, res, next) => {
       relatedId: task.id,
       relatedType: 'professional_task',
       link: `/tasks/professional/${task.id}`
-    });
+    }, req);
+    
     // Send email
     const user = await User.findByPk(userId);
     if (user) {
@@ -637,14 +627,6 @@ exports.addComment = asyncHandler(async (req, res, next) => {
         });
       } catch (e) { console.error('Failed to send email:', e); }
     }
-    io.to(`user_${userId}`).emit('notification', {
-      title: 'New Comment on Task',
-      message: `${req.user.name} commented on task: ${task.title} in project ${task.ProfessionalProject.title}\n\nComment: ${req.body.content}`,
-      type: 'comment_added',
-      relatedId: task.id,
-      relatedType: 'professional_task',
-      link: `/tasks/professional/${task.id}`
-    });
   }
   res.status(201).json({
     success: true,
@@ -688,7 +670,7 @@ exports.uploadAttachment = asyncHandler(async (req, res, next) => {
     
     // Create notification for task assignee if the uploader is not the assignee
     if (task.assignedToId && task.assignedToId !== req.user.id) {
-      await Notification.create({
+      await createNotificationWithEmission({
         userId: task.assignedToId,
         title: 'New Attachment on Task',
         message: `${req.user.name} added an attachment to task "${task.title}"`,
@@ -696,7 +678,7 @@ exports.uploadAttachment = asyncHandler(async (req, res, next) => {
         relatedId: task.id,
         relatedType: 'professional_task',
         link: `/tasks/professional/${task.id}`
-      });
+      }, req);
     }
     
     res.status(201).json({
@@ -918,34 +900,48 @@ exports.acceptProfessionalTask = asyncHandler(async (req, res, next) => {
   // Notify assigner and manager
   const assigner = task.assignedById ? await User.findByPk(task.assignedById) : null;
   const manager = task.ProfessionalProject ? await User.findByPk(task.ProfessionalProject.creatorId) : null;
-  const notifications = [];
-  if (assigner) notifications.push({
-    userId: assigner.id,
-    title: 'Task Accepted',
-    message: `${req.user.name} accepted the task: ${task.title}`,
-    type: 'task_updated',
-    relatedId: task.id,
-    relatedType: 'professional_task',
-    link: `/tasks/professional/${task.id}`
-  });
-  if (manager && (!assigner || manager.id !== assigner.id)) notifications.push({
-    userId: manager.id,
-    title: 'Task Accepted',
-    message: `${req.user.name} accepted the task: ${task.title}`,
-    type: 'task_updated',
-    relatedId: task.id,
-    relatedType: 'professional_task',
-    link: `/tasks/professional/${task.id}`
-  });
-  await Notification.bulkCreate(notifications);
-  const io = req.app.get('io');
-  notifications.forEach(n => {
-    io.to(`user_${n.userId}`).emit('notification', n);
-  });
+  
+  if (assigner) {
+    await createNotificationWithEmission({
+      userId: assigner.id,
+      title: 'Task Accepted',
+      message: `${req.user.name} accepted the task: ${task.title}`,
+      type: 'task_updated',
+      relatedId: task.id,
+      relatedType: 'professional_task',
+      link: `/tasks/professional/${task.id}`
+    }, req);
+  }
+  
+  if (manager && (!assigner || manager.id !== assigner.id)) {
+    await createNotificationWithEmission({
+      userId: manager.id,
+      title: 'Task Accepted',
+      message: `${req.user.name} accepted the task: ${task.title}`,
+      type: 'task_updated',
+      relatedId: task.id,
+      relatedType: 'professional_task',
+      link: `/tasks/professional/${task.id}`
+    }, req);
+  }
+  
   // Send emails
   const sendEmail = require('../utils/sendEmail');
-  for (const n of notifications) {
-    const user = await User.findByPk(n.userId);
+  if (assigner) {
+    const user = await User.findByPk(assigner.id);
+    if (user) {
+      try {
+        await sendEmail({
+          to: user.email,
+          subject: 'Task Accepted',
+          text: `${req.user.name} has accepted the task: ${task.title} in project ${task.ProfessionalProject.title}`
+        });
+      } catch (e) { console.error('Failed to send email:', e); }
+    }
+  }
+  
+  if (manager && (!assigner || manager.id !== assigner.id)) {
+    const user = await User.findByPk(manager.id);
     if (user) {
       try {
         await sendEmail({
@@ -976,34 +972,48 @@ exports.rejectProfessionalTask = asyncHandler(async (req, res, next) => {
   // Notify assigner and manager
   const assigner = task.assignedById ? await User.findByPk(task.assignedById) : null;
   const manager = task.ProfessionalProject ? await User.findByPk(task.ProfessionalProject.creatorId) : null;
-  const notifications = [];
-  if (assigner) notifications.push({
-    userId: assigner.id,
-    title: 'Task Rejected',
-    message: `${req.user.name} rejected the task: ${task.title}`,
-    type: 'task_updated',
-    relatedId: task.id,
-    relatedType: 'professional_task',
-    link: `/tasks/professional/${task.id}`
-  });
-  if (manager && (!assigner || manager.id !== assigner.id)) notifications.push({
-    userId: manager.id,
-    title: 'Task Rejected',
-    message: `${req.user.name} rejected the task: ${task.title}`,
-    type: 'task_updated',
-    relatedId: task.id,
-    relatedType: 'professional_task',
-    link: `/tasks/professional/${task.id}`
-  });
-  await Notification.bulkCreate(notifications);
-  const io = req.app.get('io');
-  notifications.forEach(n => {
-    io.to(`user_${n.userId}`).emit('notification', n);
-  });
+  
+  if (assigner) {
+    await createNotificationWithEmission({
+      userId: assigner.id,
+      title: 'Task Rejected',
+      message: `${req.user.name} rejected the task: ${task.title}`,
+      type: 'task_updated',
+      relatedId: task.id,
+      relatedType: 'professional_task',
+      link: `/tasks/professional/${task.id}`
+    }, req);
+  }
+  
+  if (manager && (!assigner || manager.id !== assigner.id)) {
+    await createNotificationWithEmission({
+      userId: manager.id,
+      title: 'Task Rejected',
+      message: `${req.user.name} rejected the task: ${task.title}`,
+      type: 'task_updated',
+      relatedId: task.id,
+      relatedType: 'professional_task',
+      link: `/tasks/professional/${task.id}`
+    }, req);
+  }
+  
   // Send emails
   const sendEmail = require('../utils/sendEmail');
-  for (const n of notifications) {
-    const user = await User.findByPk(n.userId);
+  if (assigner) {
+    const user = await User.findByPk(assigner.id);
+    if (user) {
+      try {
+        await sendEmail({
+          to: user.email,
+          subject: 'Task Rejected',
+          text: `${req.user.name} has rejected the task: ${task.title} in project ${task.ProfessionalProject.title}\nReason: ${req.body.rejectionReason}`
+        });
+      } catch (e) { console.error('Failed to send email:', e); }
+    }
+  }
+  
+  if (manager && (!assigner || manager.id !== assigner.id)) {
+    const user = await User.findByPk(manager.id);
     if (user) {
       try {
         await sendEmail({
@@ -1039,42 +1049,56 @@ exports.requestDeadlineExtension = asyncHandler(async (req, res, next) => {
   // Notify assigner and manager
   const assigner = task.assignedById ? await User.findByPk(task.assignedById) : null;
   const manager = task.ProfessionalProject ? await User.findByPk(task.ProfessionalProject.creatorId) : null;
-  const notifications = [];
-  if (assigner) notifications.push({
-    userId: assigner.id,
-    title: 'Deadline Extension Requested',
-    message: `${req.user.name} requested a deadline extension for task: ${task.title}`,
-    type: 'extension_requested',
-    relatedId: task.id,
-    relatedType: 'professional_task',
-    link: `/tasks/professional/${task.id}`,
-    data: {
-      extensionRequestDays: req.body.extensionRequestDays,
-      extensionRequestReason: req.body.extensionRequestReason
-    }
-  });
-  if (manager && (!assigner || manager.id !== assigner.id)) notifications.push({
-    userId: manager.id,
-    title: 'Deadline Extension Requested',
-    message: `${req.user.name} requested a deadline extension for task: ${task.title}`,
-    type: 'extension_requested',
-    relatedId: task.id,
-    relatedType: 'professional_task',
-    link: `/tasks/professional/${task.id}`,
-    data: {
-      extensionRequestDays: req.body.extensionRequestDays,
-      extensionRequestReason: req.body.extensionRequestReason
-    }
-  });
-  await Notification.bulkCreate(notifications);
-  const io = req.app.get('io');
-  notifications.forEach(n => {
-    io.to(`user_${n.userId}`).emit('notification', n);
-  });
+  
+  if (assigner) {
+    await createNotificationWithEmission({
+      userId: assigner.id,
+      title: 'Deadline Extension Requested',
+      message: `${req.user.name} requested a deadline extension for task: ${task.title}`,
+      type: 'extension_requested',
+      relatedId: task.id,
+      relatedType: 'professional_task',
+      link: `/tasks/professional/${task.id}`,
+      data: {
+        extensionRequestDays: req.body.extensionRequestDays,
+        extensionRequestReason: req.body.extensionRequestReason
+      }
+    }, req);
+  }
+  
+  if (manager && (!assigner || manager.id !== assigner.id)) {
+    await createNotificationWithEmission({
+      userId: manager.id,
+      title: 'Deadline Extension Requested',
+      message: `${req.user.name} requested a deadline extension for task: ${task.title}`,
+      type: 'extension_requested',
+      relatedId: task.id,
+      relatedType: 'professional_task',
+      link: `/tasks/professional/${task.id}`,
+      data: {
+        extensionRequestDays: req.body.extensionRequestDays,
+        extensionRequestReason: req.body.extensionRequestReason
+      }
+    }, req);
+  }
+  
   // Send emails
   const sendEmail = require('../utils/sendEmail');
-  for (const n of notifications) {
-    const user = await User.findByPk(n.userId);
+  if (assigner) {
+    const user = await User.findByPk(assigner.id);
+    if (user) {
+      try {
+        await sendEmail({
+          to: user.email,
+          subject: 'Deadline Extension Requested',
+          text: `${req.user.name} has requested a deadline extension for task: ${task.title} in project ${task.ProfessionalProject.title}\nDays requested: ${req.body.extensionRequestDays}\nReason: ${req.body.extensionRequestReason}`
+        });
+      } catch (e) { console.error('Failed to send email:', e); }
+    }
+  }
+  
+  if (manager && (!assigner || manager.id !== assigner.id)) {
+    const user = await User.findByPk(manager.id);
     if (user) {
       try {
         await sendEmail({
@@ -1115,7 +1139,7 @@ exports.approveDeadlineExtension = asyncHandler(async (req, res, next) => {
 
   // Notify assignee
   if (task.assignedToId) {
-    await Notification.create({
+    await createNotificationWithEmission({
       userId: task.assignedToId,
       title: 'Deadline Extension Approved',
       message: `Your deadline extension request for task: ${task.title} was approved`,
@@ -1123,7 +1147,8 @@ exports.approveDeadlineExtension = asyncHandler(async (req, res, next) => {
       relatedId: task.id,
       relatedType: 'professional_task',
       link: `/tasks/professional/${task.id}`
-    });
+    }, req);
+    
     // Send email
     const sendEmail = require('../utils/sendEmail');
     const user = await User.findByPk(task.assignedToId);
@@ -1137,15 +1162,6 @@ exports.approveDeadlineExtension = asyncHandler(async (req, res, next) => {
       } catch (e) { console.error('Failed to send email:', e); }
     }
   }
-  const io = req.app.get('io');
-  io.to(`user_${task.assignedToId}`).emit('notification', {
-    title: 'Deadline Extension Approved',
-    message: `Your deadline extension request for task: ${task.title} in project ${task.ProfessionalProject.title} was approved. New due date: ${newDueDate.toLocaleString()}`,
-    type: 'extension_response',
-    relatedId: task.id,
-    relatedType: 'professional_task',
-    link: `/tasks/professional/${task.id}`
-  });
   res.status(200).json({ success: true, data: task });
 });
 
@@ -1171,7 +1187,7 @@ exports.rejectDeadlineExtension = asyncHandler(async (req, res, next) => {
 
   // Notify assignee
   if (task.assignedToId) {
-    await Notification.create({
+    await createNotificationWithEmission({
       userId: task.assignedToId,
       title: 'Deadline Extension Rejected',
       message: `Your deadline extension request for task: ${task.title} was rejected`,
@@ -1179,7 +1195,8 @@ exports.rejectDeadlineExtension = asyncHandler(async (req, res, next) => {
       relatedId: task.id,
       relatedType: 'professional_task',
       link: `/tasks/professional/${task.id}`
-    });
+    }, req);
+    
     // Send email
     const sendEmail = require('../utils/sendEmail');
     const user = await User.findByPk(task.assignedToId);
@@ -1193,15 +1210,6 @@ exports.rejectDeadlineExtension = asyncHandler(async (req, res, next) => {
       } catch (e) { console.error('Failed to send email:', e); }
     }
   }
-  const io = req.app.get('io');
-  io.to(`user_${task.assignedToId}`).emit('notification', {
-    title: 'Deadline Extension Rejected',
-    message: `Your deadline extension request for task: ${task.title} in project ${task.ProfessionalProject.title} was rejected.`,
-    type: 'extension_response',
-    relatedId: task.id,
-    relatedType: 'professional_task',
-    link: `/tasks/professional/${task.id}`
-  });
   res.status(200).json({ success: true, data: task });
 });
 

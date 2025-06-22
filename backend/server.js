@@ -166,6 +166,35 @@ app.post('/api/test-socket', (req, res) => {
   res.json({ success: true, message: 'Test message sent' });
 });
 
+// Add test endpoint to create a test notification
+app.post('/api/test-notification', async (req, res) => {
+  const { userId } = req.body;
+  if (!userId) {
+    return res.status(400).json({ error: 'User ID is required' });
+  }
+
+  try {
+    const { Notification } = require('./models');
+    const notification = await Notification.create({
+      userId: userId,
+      title: 'Test Notification',
+      message: 'This is a test notification to verify real-time functionality',
+      type: 'system',
+      isRead: false
+    });
+
+    // Emit real-time notification
+    const roomName = `user_${userId}`;
+    console.log(`[DEBUG] Emitting test notification to room ${roomName}:`, notification.toJSON());
+    io.to(roomName).emit('notification', notification.toJSON());
+
+    res.json({ success: true, data: notification });
+  } catch (error) {
+    console.error('[ERROR] Failed to create test notification:', error);
+    res.status(500).json({ error: 'Failed to create test notification' });
+  }
+});
+
 // Add connection logging
 io.on('connection', (socket) => {
   console.log('[DEBUG] New socket connection:', socket.id);

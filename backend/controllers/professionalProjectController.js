@@ -287,7 +287,7 @@ exports.updateProfessionalProject = asyncHandler(async (req, res, next) => {
 
     // Only creator can update project details
     if (project.creatorId === userId) {
-      await project.update({
+      const updateData = {
         title,
         description,
         startDate,
@@ -295,7 +295,17 @@ exports.updateProfessionalProject = asyncHandler(async (req, res, next) => {
         status,
         priority,
         color
-      }, { transaction });
+      };
+
+      // Business rule: if status is 'completed', set completionRate to 100
+      if (status === 'completed') {
+        updateData.completionRate = 100;
+      } else if (project.status === 'completed' && status !== 'completed') {
+        // Optional: Reset completion rate if project is reopened
+        updateData.completionRate = 0; 
+      }
+      
+      await project.update(updateData, { transaction });
 
       // Update members if specified
       if (members && Array.isArray(members)) {

@@ -115,13 +115,25 @@ exports.createNotification = asyncHandler(async (req, res, next) => {
   
   const io = req.app.get('io');
   
-  const notification = await Notification.create(req.body);
-  io.to(`user_${req.body.userId}`).emit('notification', req.body);
-  
-  res.status(201).json({
-    success: true,
-    data: notification
-  });
+  try {
+    const notification = await Notification.create(req.body);
+    
+    // Emit real-time notification if socket.io is available
+    if (io) {
+      console.log(`[DEBUG] Emitting notification to user_${req.body.userId}:`, notification.toJSON());
+      io.to(`user_${req.body.userId}`).emit('notification', notification.toJSON());
+    } else {
+      console.warn('[WARNING] Socket.io instance not available for real-time notification');
+    }
+    
+    res.status(201).json({
+      success: true,
+      data: notification
+    });
+  } catch (error) {
+    console.error('[ERROR] Failed to create notification:', error);
+    return next(new ErrorResponse('Failed to create notification', 500));
+  }
 });
 
 // @desc    Mark notification as read
@@ -223,3 +235,27 @@ exports.getProfessionalProject = asyncHandler(async (req, res, next) => {
     data: project
   });
 });
+
+// Helper function to create notification with real-time emission
+const createNotificationWithEmission = async (notificationData, req) => {
+  try {
+    const notification = await Notification.create(notificationData);
+    
+    // Emit real-time notification if socket.io is available
+    const io = req.app.get('io');
+    if (io) {
+      console.log(`[DEBUG] Emitting notification to user_${notificationData.userId}:`, notification.toJSON());
+      io.to(`user_${notificationData.userId}`).emit('notification', notification.toJSON());
+    } else {
+      console.warn('[WARNING] Socket.io instance not available for real-time notification');
+    }
+    
+    return notification;
+  } catch (error) {
+    console.error('[ERROR] Failed to create notification:', error);
+    throw error;
+  }
+};
+
+// Export the helper function for use in other controllers
+module.exports.createNotificationWithEmission = createNotificationWithEmission;

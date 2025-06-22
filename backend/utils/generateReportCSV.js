@@ -7,7 +7,25 @@ const safeFormat = (date, fmt) => {
 
 const generateCSV = ({ tasks, insights, scope }) => {
   // Define fields for task data
-  const taskFields = [
+  const taskFields = scope.includes('professional') ? [
+    'title',
+    'description',
+    'status',
+    'priority',
+    'assignedTo',
+    'assignedBy',
+    'department',
+    'project',
+    'dueDate',
+    'originalDueDate',
+    'completedAt',
+    'estimatedTime',
+    'actualTime',
+    'rejectionReason',
+    'extensionStatus',
+    'extensionRequestDays',
+    'createdAt'
+  ] : [
     'title',
     'status',
     'priority',
@@ -22,19 +40,35 @@ const generateCSV = ({ tasks, insights, scope }) => {
   ];
 
   // Transform tasks data for CSV
-  const taskData = tasks.map(task => ({
-    title: task.title || '',
-    status: task.status || '',
-    priority: task.priority || '',
-    assignedTo: task.assignedTo?.name || task.User?.name || 'Unassigned',
-    department: task.Department?.name || task.department || 'No Department',
-    project: task.ProfessionalProject?.title || task.PersonalProject?.title || task.project || 'No Project',
-    dueDate: safeFormat(task.dueDate, 'PP'),
-    completedAt: safeFormat(task.completedAt, 'PP'),
-    estimatedTime: task.estimatedTime ? `${task.estimatedTime} minutes` : '',
-    actualTime: task.actualTime ? `${task.actualTime} minutes` : '',
-    createdAt: safeFormat(task.createdAt, 'PP')
-  }));
+  const taskData = tasks.map(task => {
+    const baseData = {
+      title: task.title || '',
+      status: task.status || '',
+      priority: task.priority || '',
+      assignedTo: task.assignedTo?.name || task.User?.name || 'Unassigned',
+      department: task.Department?.name || task.department || 'No Department',
+      project: task.ProfessionalProject?.title || task.PersonalProject?.title || task.project || 'No Project',
+      dueDate: safeFormat(task.dueDate, 'PP'),
+      completedAt: safeFormat(task.completedAt, 'PP'),
+      estimatedTime: task.estimatedTime ? `${task.estimatedTime} minutes` : '',
+      actualTime: task.actualTime ? `${task.actualTime} minutes` : '',
+      createdAt: safeFormat(task.createdAt, 'PP')
+    };
+
+    if (scope.includes('professional')) {
+      return {
+        ...baseData,
+        description: task.description || '',
+        assignedBy: task.assignedBy?.name || 'Unknown',
+        originalDueDate: safeFormat(task.originalDueDate, 'PP'),
+        rejectionReason: task.rejectionReason || '',
+        extensionStatus: task.extensionStatus || 'none',
+        extensionRequestDays: task.extensionRequestDays || 0
+      };
+    }
+
+    return baseData;
+  });
 
   // Create CSV parser
   const parser = new Parser({ fields: taskFields });
@@ -59,6 +93,14 @@ const generateCSV = ({ tasks, insights, scope }) => {
     `Completed Tasks,${insights.completedTasks}`,
     `Completion Rate,${insights.completionRate.toFixed(1)}%`,
     `Overdue Tasks,${insights.overdueCount}`,
+    ...(scope.includes('professional') ? [
+      `Rejected Tasks,${insights.rejectedTasks || 0}`,
+      `Tasks in Review,${insights.tasksInReview || 0}`,
+      `Extension Requests,${insights.extensionRequests || 0}`,
+      `High Priority Tasks,${insights.highPriorityTasks || 0}`,
+      `Project Completion Rate,${insights.projectCompletionRate || 0}%`,
+      `Project Status,${insights.projectStatus || 'Unknown'}`
+    ] : []),
     '',
     // Status Distribution
     'Task Status Distribution',

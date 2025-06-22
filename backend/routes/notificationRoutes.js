@@ -17,12 +17,14 @@ router.route('/')
   .get(getNotifications)
   .post(createNotification);
 
+// Specific routes must come before parameterized routes
+router.put('/read-all', markAllAsRead);
+router.delete('/clear-read', clearReadNotifications);
+
 router.route('/:id')
   .get(getNotification)
   .delete(deleteNotification);
 
 router.put('/:id/read', markAsRead);
-router.put('/read-all', markAllAsRead);
-router.delete('/clear-read', clearReadNotifications);
 
 module.exports = router;

@@ -72,8 +72,11 @@ const ProductivityReport = () => {
       }
       const response = await api.get(endpoint);
       console.log('API response for projects:', response);
-      setProjects(response);
+      // Handle both array and object responses
+      const projectData = Array.isArray(response) ? response : (response.data || []);
+      setProjects(projectData);
     } catch (err) {
+      console.error('Error fetching projects:', err);
       setProjects([]);
       setError('Failed to fetch projects');
       toast.error('Failed to fetch projects');
@@ -183,6 +186,7 @@ const ProductivityReport = () => {
         }
       } else {
         // Handle JSON response
+        console.log('Report data received:', response.data || response);
         setReportData(response.data || response);
       }
     } catch (err) {
@@ -202,7 +206,7 @@ const ProductivityReport = () => {
     // Status Distribution Chart
     if (reportData.charts.statusDistribution) {
       charts.push(
-        <Grid item xs={12} md={6} key="status">
+        <Grid item xs={12} md={4} key="status">
           <Paper elevation={3} sx={{ p: 2 }}>
             <Typography variant="h6" gutterBottom>Task Status Distribution</Typography>
             <Box sx={{ height: 300 }}>
@@ -226,7 +230,7 @@ const ProductivityReport = () => {
     // Priority Distribution Chart
     if (reportData.charts.priorityDistribution) {
       charts.push(
-        <Grid item xs={12} md={6} key="priority">
+        <Grid item xs={12} md={4} key="priority">
           <Paper elevation={3} sx={{ p: 2 }}>
             <Typography variant="h6" gutterBottom>Tasks by Priority</Typography>
             <Box sx={{ height: 300 }}>
@@ -255,7 +259,7 @@ const ProductivityReport = () => {
     // Project Distribution Chart (for personal tasks)
     if (reportData.charts.projectDistribution) {
       charts.push(
-        <Grid item xs={12} md={6} key="project">
+        <Grid item xs={12} md={4} key="project">
           <Paper elevation={3} sx={{ p: 2 }}>
             <Typography variant="h6" gutterBottom>Tasks per Project</Typography>
             <Box sx={{ height: 300 }}>
@@ -284,7 +288,7 @@ const ProductivityReport = () => {
     // Department Distribution Chart (for professional tasks)
     if (reportData.charts.departmentDistribution) {
       charts.push(
-        <Grid item xs={12} md={6} key="department">
+        <Grid item xs={12} md={4} key="department">
           <Paper elevation={3} sx={{ p: 2 }}>
             <Typography variant="h6" gutterBottom>Tasks per Department</Typography>
             <Box sx={{ height: 300 }}>
@@ -313,7 +317,7 @@ const ProductivityReport = () => {
     // User Distribution Chart
     if (reportData.charts.userDistribution) {
       charts.push(
-        <Grid item xs={12} md={6} key="user">
+        <Grid item xs={12} md={4} key="user">
           <Paper elevation={3} sx={{ p: 2 }}>
             <Typography variant="h6" gutterBottom>Tasks per User</Typography>
             <Box sx={{ height: 300 }}>
@@ -455,19 +459,23 @@ const ProductivityReport = () => {
       {reportData && filters.format === 'json' && (
         <>
           {/* KPIs Section */}
-          <Grid container spacing={3} sx={{ mb: 3 }}>
-            <Grid item xs={12} md={3}>
-              <Card>
-                <CardContent sx={{ textAlign: 'center' }}>
-                  <Typography variant="h6" color="textSecondary" gutterBottom>
-                    Completion Rate
-                  </Typography>
-                  <Typography variant="h4" color="primary" fontWeight="bold">
-                    {reportData.insights.completionRate.toFixed(1)}%
-                  </Typography>
-                </CardContent>
-              </Card>
-            </Grid>
+          <Grid container spacing={3} sx={{ mb: 6 }}>
+            {!['personal_project', 'professional_project'].includes(filters.scope) && (
+              <Grid item xs={12} md={3}>
+                <Card>
+                  <CardContent sx={{ textAlign: 'center' }}>
+                    <Typography variant="h6" color="textSecondary" gutterBottom>
+                      Completion Rate
+                    </Typography>
+                    <Typography variant="h4" color="primary" fontWeight="bold">
+                      {typeof reportData.insights.completionRate === 'number' 
+                        ? reportData.insights.completionRate.toFixed(1) 
+                        : parseFloat(reportData.insights.completionRate || 0).toFixed(1)}%
+                    </Typography>
+                  </CardContent>
+                </Card>
+              </Grid>
+            )}
             <Grid item xs={12} md={3}>
               <Card>
                 <CardContent sx={{ textAlign: 'center' }}>
@@ -475,7 +483,7 @@ const ProductivityReport = () => {
                     Total Tasks
                   </Typography>
                   <Typography variant="h4" color="textPrimary" fontWeight="bold">
-                    {reportData.insights.totalTasks}
+                    {reportData.insights.totalTasks || 0}
                   </Typography>
                 </CardContent>
               </Card>
@@ -487,7 +495,7 @@ const ProductivityReport = () => {
                     Completed Tasks
                   </Typography>
                   <Typography variant="h4" color="success.main" fontWeight="bold">
-                    {reportData.insights.completedTasks}
+                    {reportData.insights.completedTasks || 0}
                   </Typography>
                 </CardContent>
               </Card>
@@ -499,15 +507,179 @@ const ProductivityReport = () => {
                     Overdue Tasks
                   </Typography>
                   <Typography variant="h4" color="error.main" fontWeight="bold">
-                    {reportData.insights.overdueCount}
+                    {reportData.insights.overdueCount || 0}
                   </Typography>
                 </CardContent>
               </Card>
             </Grid>
+            
+            {/* Additional KPIs for professional projects */}
+            {filters.scope.includes('professional') && (
+              <>
+                {reportData.insights.rejectedTasks !== undefined && (
+                  <Grid item xs={12} md={3}>
+                    <Card>
+                      <CardContent sx={{ textAlign: 'center' }}>
+                        <Typography variant="h6" color="textSecondary" gutterBottom>
+                          Rejected Tasks
+                        </Typography>
+                        <Typography variant="h4" color="error.main" fontWeight="bold">
+                          {reportData.insights.rejectedTasks}
+                        </Typography>
+                      </CardContent>
+                    </Card>
+                  </Grid>
+                )}
+                {reportData.insights.extensionRequests !== undefined && (
+                  <Grid item xs={12} md={3}>
+                    <Card>
+                      <CardContent sx={{ textAlign: 'center' }}>
+                        <Typography variant="h6" color="textSecondary" gutterBottom>
+                          Extension Requests
+                        </Typography>
+                        <Typography variant="h4" color="info.main" fontWeight="bold">
+                          {reportData.insights.extensionRequests}
+                        </Typography>
+                      </CardContent>
+                    </Card>
+                  </Grid>
+                )}
+                {reportData.insights.highPriorityTasks !== undefined && (
+                  <Grid item xs={12} md={3}>
+                    <Card>
+                      <CardContent sx={{ textAlign: 'center' }}>
+                        <Typography variant="h6" color="textSecondary" gutterBottom>
+                          High Priority Tasks
+                        </Typography>
+                        <Typography variant="h4" color="error.main" fontWeight="bold">
+                          {reportData.insights.highPriorityTasks}
+                        </Typography>
+                      </CardContent>
+                    </Card>
+                  </Grid>
+                )}
+                {reportData.insights.projectCompletionRate !== undefined && (
+                  <Grid item xs={12} md={3}>
+                    <Card>
+                      <CardContent sx={{ textAlign: 'center' }}>
+                        <Typography variant="h6" color="textSecondary" gutterBottom>
+                          Project Completion Rate
+                        </Typography>
+                        <Typography variant="h4" color="primary" fontWeight="bold">
+                          {typeof reportData.insights.projectCompletionRate === 'number' 
+                            ? reportData.insights.projectCompletionRate.toFixed(1) 
+                            : parseFloat(reportData.insights.projectCompletionRate || 0).toFixed(1)}%
+                        </Typography>
+                      </CardContent>
+                    </Card>
+                  </Grid>
+                )}
+              </>
+            )}
           </Grid>
 
+          {/* Performance Highlights Section */}
+          {filters.scope.includes('professional') && reportData.insights.performanceHighlights && (
+            <Paper elevation={3} sx={{ p: 3, mt: 3 }}>
+              <Typography variant="h6" gutterBottom sx={{ mb: 2 }}>
+                Performance Highlights
+              </Typography>
+              <Grid container spacing={3}>
+                {reportData.insights.performanceHighlights.mostProductiveDepartment ? (
+                  <Grid item xs={12} sm={6} md={4}>
+                    <Paper variant="outlined" sx={{ p: 2, height: '100%' }}>
+                      <Typography variant="subtitle2" color="text.secondary">Most Productive Department</Typography>
+                      <Typography variant="body1" fontWeight="bold">{reportData.insights.performanceHighlights.mostProductiveDepartment.name}</Typography>
+                      <Typography variant="caption" color="text.secondary">Avg. Efficiency Ratio: {reportData.insights.performanceHighlights.mostProductiveDepartment.avgEfficiencyRatio}</Typography>
+                    </Paper>
+                  </Grid>
+                ) : null}
+                {reportData.insights.performanceHighlights.mostProductiveUser ? (
+                  <Grid item xs={12} sm={6} md={4}>
+                    <Paper variant="outlined" sx={{ p: 2, height: '100%' }}>
+                      <Typography variant="subtitle2" color="text.secondary">Most Productive User</Typography>
+                      <Typography variant="body1" fontWeight="bold">{reportData.insights.performanceHighlights.mostProductiveUser.name}</Typography>
+                      <Typography variant="caption" color="text.secondary">Avg. Efficiency Ratio: {reportData.insights.performanceHighlights.mostProductiveUser.avgEfficiencyRatio}</Typography>
+                    </Paper>
+                  </Grid>
+                ) : null}
+                {reportData.insights.performanceHighlights.userWithMostTasks ? (
+                  <Grid item xs={12} sm={6} md={4}>
+                    <Paper variant="outlined" sx={{ p: 2, height: '100%' }}>
+                      <Typography variant="subtitle2" color="text.secondary">User with Most Tasks</Typography>
+                      <Typography variant="body1" fontWeight="bold">{reportData.insights.performanceHighlights.userWithMostTasks.name}</Typography>
+                      <Typography variant="caption" color="text.secondary">{reportData.insights.performanceHighlights.userWithMostTasks.taskCount} tasks</Typography>
+                    </Paper>
+                  </Grid>
+                ) : null}
+                {reportData.insights.performanceHighlights.leastProductiveUser ? (
+                  <Grid item xs={12} sm={6} md={4}>
+                    <Paper variant="outlined" sx={{ p: 2, height: '100%' }}>
+                      <Typography variant="subtitle2" color="text.secondary">Least Productive User</Typography>
+                      <Typography variant="body1" fontWeight="bold">{reportData.insights.performanceHighlights.leastProductiveUser.name}</Typography>
+                      <Typography variant="caption" color="text.secondary">Avg. Efficiency Ratio: {reportData.insights.performanceHighlights.leastProductiveUser.avgEfficiencyRatio}</Typography>
+                    </Paper>
+                  </Grid>
+                ) : null}
+                {reportData.insights.performanceHighlights.userWithMostRejections ? (
+                  <Grid item xs={12} sm={6} md={4}>
+                    <Paper variant="outlined" sx={{ p: 2, height: '100%' }}>
+                      <Typography variant="subtitle2" color="text.secondary">User with Most Rejections</Typography>
+                      <Typography variant="body1" fontWeight="bold">{reportData.insights.performanceHighlights.userWithMostRejections.name}</Typography>
+                      <Typography variant="caption" color="text.secondary">{reportData.insights.performanceHighlights.userWithMostRejections.rejectionCount} rejections</Typography>
+                    </Paper>
+                  </Grid>
+                ) : null}
+              </Grid>
+            </Paper>
+          )}
+
           {/* Charts Section */}
-          {renderCharts()}
+          <Box sx={{ mt: 4 }}>
+            {renderCharts()}
+          </Box>
+
+          {/* Project Information for Professional Projects */}
+          {filters.scope.includes('professional') && reportData.project && (
+            <Paper elevation={3} sx={{ p: 3, mt: 3 }}>
+              <Typography variant="h6" gutterBottom>
+                Project Information
+              </Typography>
+              <Grid container spacing={2}>
+                <Grid item xs={12} md={3}>
+                  <Typography variant="body2" color="textSecondary">
+                    Project Name: <strong>{reportData.project.title || 'Unknown'}</strong>
+                  </Typography>
+                </Grid>
+                <Grid item xs={12} md={3}>
+                  <Typography variant="body2" color="textSecondary">
+                    Status: <strong>{(reportData.project.status || 'unknown').replace('-', ' ').toUpperCase()}</strong>
+                  </Typography>
+                </Grid>
+                <Grid item xs={12} md={3}>
+                  <Typography variant="body2" color="textSecondary">
+                    Priority: <strong>{(reportData.project.priority || 'medium').toUpperCase()}</strong>
+                  </Typography>
+                </Grid>
+                <Grid item xs={12} md={3}>
+                  <Typography variant="body2" color="textSecondary">
+                    Completion Rate: <strong>
+                      {typeof reportData.project.completionRate === 'number' 
+                        ? reportData.project.completionRate.toFixed(1) 
+                        : parseFloat(reportData.project.completionRate || 0).toFixed(1)}%
+                    </strong>
+                  </Typography>
+                </Grid>
+                {reportData.project.description && (
+                  <Grid item xs={12}>
+                    <Typography variant="body2" color="textSecondary">
+                      Description: {reportData.project.description}
+                    </Typography>
+                  </Grid>
+                )}
+              </Grid>
+            </Paper>
+          )}
 
           {/* Task List Section */}
           <Paper elevation={3} sx={{ p: 3, mt: 3 }}>
@@ -525,6 +697,11 @@ const ProductivityReport = () => {
                             <Typography variant="subtitle1" fontWeight="bold">
                               {task.title}
                             </Typography>
+                            {task.description && (
+                              <Typography variant="body2" color="textSecondary" sx={{ mt: 0.5 }}>
+                                {task.description.length > 100 ? `${task.description.substring(0, 100)}...` : task.description}
+                              </Typography>
+                            )}
                           </Grid>
                           <Grid item xs={6} md={2}>
                             <Typography variant="body2" color="textSecondary">
@@ -557,6 +734,38 @@ const ProductivityReport = () => {
                               {task.assignedTo || task.User?.name || 'Unassigned'}
                             </Typography>
                           </Grid>
+                          
+                          {/* Additional fields for professional tasks */}
+                          {filters.scope.includes('professional') && (
+                            <>
+                              {task.assignedBy && (
+                                <Grid item xs={6} md={2}>
+                                  <Typography variant="body2" color="textSecondary">
+                                    Assigned by: {task.assignedBy}
+                                  </Typography>
+                                </Grid>
+                              )}
+                              {task.department && (
+                                <Grid item xs={6} md={2}>
+                                  <Typography variant="body2" color="textSecondary">
+                                    Department: {task.department}
+                                  </Typography>
+                                </Grid>
+                              )}
+                              {task.extensionStatus && task.extensionStatus !== 'none' && (
+                                <Grid item xs={6} md={2}>
+                                  <Typography variant="body2" color="textSecondary">
+                                    Extension: <span style={{ 
+                                      color: task.extensionStatus === 'approved' ? 'green' : 
+                                             task.extensionStatus === 'rejected' ? 'red' : 'orange'
+                                    }}>
+                                      {task.extensionStatus.toUpperCase()}
+                                    </span>
+                                  </Typography>
+                                </Grid>
+                              )}
+                            </>
+                          )}
                         </Grid>
                       </CardContent>
                     </Card>

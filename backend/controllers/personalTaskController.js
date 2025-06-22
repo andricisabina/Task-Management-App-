@@ -1,7 +1,9 @@
-const { PersonalTask, PersonalProject, sequelize } = require('../models');
+const { PersonalTask, PersonalProject, User, Notification } = require('../models');
 const asyncHandler = require('../middleware/asyncHandler');
 const ErrorResponse = require('../utils/errorResponse');
 const { Op } = require('sequelize');
+const sequelize = require('../config/sequelize');
+const { createNotificationWithEmission } = require('./notificationController');
 
 // @desc    Get all personal tasks for a user
 // @route   GET /api/personal-tasks
@@ -214,14 +216,7 @@ exports.updatePersonalTask = asyncHandler(async (req, res, next) => {
           await project.update({ status: 'completed' });
           console.log(`[DEBUG] Project status updated to completed for project ${project.id}`);
 
-          // Get socket.io instance
-          const io = req.app.get('io');
-          if (!io) {
-            console.error('[ERROR] Socket.io instance not found in app');
-            return;
-          }
-
-          // Create notification
+          // Create notification using helper function
           console.log(`[DEBUG] Creating notification for project completion:`, {
             userId: project.userId,
             title: 'Project Completed',
@@ -232,7 +227,7 @@ exports.updatePersonalTask = asyncHandler(async (req, res, next) => {
             link: `/projects/personal/${project.id}`
           });
 
-          const notification = await Notification.create({
+          await createNotificationWithEmission({
             userId: project.userId,
             title: 'Project Completed',
             message: `Your personal project "${project.title}" has been marked as completed.`,
@@ -240,22 +235,9 @@ exports.updatePersonalTask = asyncHandler(async (req, res, next) => {
             relatedId: project.id,
             relatedType: 'personal_project',
             link: `/projects/personal/${project.id}`
-          });
+          }, req);
 
-          console.log(`[DEBUG] Notification created successfully:`, notification.toJSON());
-
-          // Emit notification
-          console.log(`[DEBUG] Emitting notification to user_${project.userId}`);
-          io.to(`user_${project.userId}`).emit('notification', notification.toJSON());
-          console.log(`[DEBUG] Notification emitted successfully`);
-
-          // Verify notification was created in database
-          const savedNotification = await Notification.findByPk(notification.id);
-          if (!savedNotification) {
-            console.error('[ERROR] Notification was not saved to database');
-          } else {
-            console.log('[DEBUG] Verified notification exists in database:', savedNotification.toJSON());
-          }
+          console.log(`[DEBUG] Notification created and emitted successfully`);
         } catch (err) {
           console.error('[ERROR] Failed to handle project completion:', err);
           // Don't throw error to prevent task update from failing

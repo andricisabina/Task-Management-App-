@@ -28,21 +28,40 @@ router.get('/team', authenticate, async (req, res) => {
   const { ProfessionalProject, ProjectMember } = require('../models');
   const userId = req.user.id;
   console.log('Fetching team projects for user:', userId);
-  const projects = await ProfessionalProject.findAll({
-    include: [{
-      model: ProjectMember,
-      as: 'ProjectMembers',
-      where: { userId },
-      required: false
-    }],
-    attributes: ['id', 'title', 'creatorId']
-  });
-  // Filter: user is creator or a member
-  const filtered = projects.filter(
-    p => Number(p.creatorId) === Number(userId) || (p.ProjectMembers && p.ProjectMembers.length > 0)
-  );
-  console.log('Found team projects:', filtered.map(p => p.toJSON()));
-  res.json(filtered.map(p => ({ id: p.id, name: p.title })));
+  
+  try {
+    // Get projects where user is a member
+    const memberProjects = await ProfessionalProject.findAll({
+      include: [{
+        model: ProjectMember,
+        as: 'ProjectMembers',
+        where: { 
+          userId: userId,
+          status: 'accepted'
+        },
+        required: true
+      }],
+      attributes: ['id', 'title', 'creatorId']
+    });
+
+    // Get projects where user is the creator
+    const creatorProjects = await ProfessionalProject.findAll({
+      where: { creatorId: userId },
+      attributes: ['id', 'title', 'creatorId']
+    });
+
+    // Combine and deduplicate
+    const allProjects = [...memberProjects, ...creatorProjects];
+    const uniqueProjects = allProjects.filter((project, index, self) => 
+      index === self.findIndex(p => p.id === project.id)
+    );
+
+    console.log('Found team projects:', uniqueProjects.map(p => p.toJSON()));
+    res.json(uniqueProjects.map(p => ({ id: p.id, name: p.title })));
+  } catch (error) {
+    console.error('Error fetching team projects:', error);
+    res.status(500).json({ error: 'Failed to fetch team projects' });
+  }
 });
 
 module.exports = router; 

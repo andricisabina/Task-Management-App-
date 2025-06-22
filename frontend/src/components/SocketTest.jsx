@@ -1,103 +1,92 @@
-import React, { useState, useEffect } from 'react';
-import { useAuth } from '../context/AuthContext';
+import React, { useState } from 'react';
 import { useNotifications } from '../context/NotificationContext';
+import { useAuth } from '../context/AuthContext';
 import api from '../services/api';
-import { toast } from 'react-toastify';
 
 const SocketTest = () => {
+  const [message, setMessage] = useState('');
+  const [testResult, setTestResult] = useState('');
+  const { isConnected, unreadCount, notifications } = useNotifications();
   const { currentUser } = useAuth();
-  const { isConnected } = useNotifications();
-  const [testMessages, setTestMessages] = useState([]);
-  const [customMessage, setCustomMessage] = useState('');
-
-  useEffect(() => {
-    // Listen for test messages
-    const handleTestMessage = (data) => {
-      console.log('[DEBUG] Received test message:', data);
-      setTestMessages(prev => [data, ...prev]);
-      toast.info(data.message);
-    };
-
-    // Get socket instance from NotificationContext
-    const socket = window.socket;
-    if (socket) {
-      socket.on('test_message', handleTestMessage);
-      socket.on('room_joined', (data) => {
-        console.log('[DEBUG] Room joined:', data);
-        toast.success(`Joined room: ${data.room}`);
-      });
-    }
-
-    return () => {
-      if (socket) {
-        socket.off('test_message', handleTestMessage);
-        socket.off('room_joined');
-      }
-    };
-  }, []);
 
   const sendTestMessage = async () => {
     try {
-      const response = await api.post('/test-socket', {
+      const response = await api.post('/api/test-socket', {
         userId: currentUser.id,
-        message: customMessage || 'Test message from client'
+        message: message || 'Test message'
       });
-      console.log('[DEBUG] Test message sent:', response);
-      toast.success('Test message sent');
+      setTestResult(`Test message sent: ${response.data.message}`);
     } catch (error) {
-      console.error('[ERROR] Failed to send test message:', error);
-      toast.error('Failed to send test message');
+      setTestResult(`Error: ${error.message}`);
+    }
+  };
+
+  const createTestNotification = async () => {
+    try {
+      const response = await api.post('/api/test-notification', {
+        userId: currentUser.id
+      });
+      setTestResult(`Test notification created: ${response.data.data.title}`);
+    } catch (error) {
+      setTestResult(`Error: ${error.message}`);
     }
   };
 
   return (
-    <div style={{ padding: '20px', maxWidth: '600px', margin: '0 auto' }}>
-      <h2>Socket Connection Test</h2>
-      <div style={{ marginBottom: '20px' }}>
-        <p>Connection Status: <span style={{ color: isConnected ? 'green' : 'red' }}>
-          {isConnected ? 'Connected' : 'Disconnected'}
-        </span></p>
+    <div style={{ padding: '20px', maxWidth: '600px' }}>
+      <h2>Socket & Notification Test</h2>
+      
+      <div style={{ marginBottom: '20px', padding: '10px', backgroundColor: '#f0f0f0' }}>
+        <h3>Status</h3>
+        <p><strong>Socket Connected:</strong> {isConnected ? '✅ Yes' : '❌ No'}</p>
+        <p><strong>User ID:</strong> {currentUser?.id || 'Not logged in'}</p>
+        <p><strong>Unread Count:</strong> {unreadCount}</p>
+        <p><strong>Total Notifications:</strong> {notifications.length}</p>
       </div>
 
       <div style={{ marginBottom: '20px' }}>
+        <h3>Test Socket Message</h3>
         <input
           type="text"
-          value={customMessage}
-          onChange={(e) => setCustomMessage(e.target.value)}
+          value={message}
+          onChange={(e) => setMessage(e.target.value)}
           placeholder="Enter test message"
           style={{ marginRight: '10px', padding: '5px' }}
         />
-        <button
-          onClick={sendTestMessage}
-          style={{
-            padding: '5px 10px',
-            backgroundColor: '#007bff',
-            color: 'white',
-            border: 'none',
-            borderRadius: '4px',
-            cursor: 'pointer'
-          }}
-        >
+        <button onClick={sendTestMessage} style={{ padding: '5px 10px' }}>
           Send Test Message
         </button>
       </div>
 
-      <div>
-        <h3>Test Messages:</h3>
-        <div style={{ 
-          maxHeight: '300px', 
-          overflowY: 'auto',
-          border: '1px solid #ccc',
-          padding: '10px',
-          borderRadius: '4px'
-        }}>
-          {testMessages.map((msg, index) => (
-            <div key={index} style={{ marginBottom: '10px', padding: '5px', borderBottom: '1px solid #eee' }}>
-              <p><strong>Message:</strong> {msg.message}</p>
-              <p><small>Time: {new Date(msg.timestamp).toLocaleString()}</small></p>
-            </div>
-          ))}
+      <div style={{ marginBottom: '20px' }}>
+        <h3>Test Notification</h3>
+        <button onClick={createTestNotification} style={{ padding: '5px 10px' }}>
+          Create Test Notification
+        </button>
+      </div>
+
+      {testResult && (
+        <div style={{ padding: '10px', backgroundColor: '#e8f5e8', border: '1px solid #4caf50' }}>
+          <strong>Result:</strong> {testResult}
         </div>
+      )}
+
+      <div style={{ marginTop: '20px' }}>
+        <h3>Recent Notifications</h3>
+        {notifications.slice(0, 5).map((notification) => (
+          <div key={notification.id} style={{ 
+            padding: '10px', 
+            margin: '5px 0', 
+            backgroundColor: notification.isRead ? '#f9f9f9' : '#f0f6ff',
+            border: '1px solid #ddd'
+          }}>
+            <div><strong>{notification.title}</strong></div>
+            <div>{notification.message}</div>
+            <div style={{ fontSize: '12px', color: '#666' }}>
+              {new Date(notification.createdAt).toLocaleString()} - {notification.isRead ? 'Read' : 'Unread'}
+            </div>
+          </div>
+        ))}
       </div>
     </div>
   );

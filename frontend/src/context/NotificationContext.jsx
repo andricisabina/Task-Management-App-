@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react';
 import api from '../services/api';
 import { toast } from "react-toastify";
 import { io as socketIOClient } from 'socket.io-client';
@@ -17,41 +17,47 @@ export const useNotifications = () => {
 export const NotificationProvider = ({ children }) => {
   const [notifications, setNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
-  const [lastNotificationId, setLastNotificationId] = useState(null);
+  const lastNotificationIdRef = useRef(null);
   const [isConnected, setIsConnected] = useState(false);
   const { currentUser } = useAuth() || {};
   
   // Use refs to maintain socket instance and prevent unnecessary re-renders
   const socketRef = useRef(null);
   const pollingIntervalRef = useRef(null);
+  const isInitializedRef = useRef(false);
 
-  const fetchNotifications = async () => {
+  const fetchNotifications = useCallback(async () => {
     try {
       const response = await api.get('/notifications');
-      setNotifications(response.data);
-      setUnreadCount(response.data.filter(n => !n.isRead).length);
+      
+      const notificationsData = response.data.data || response.data;
+      const unreadCountData = notificationsData.filter(n => !n.isRead).length;
+      
+      setNotifications(notificationsData);
+      setUnreadCount(unreadCountData);
 
-      // Show toast for new notification
-      if (response.data.length > 0 && response.data[0].id !== lastNotificationId) {
-        if (lastNotificationId !== null) {
-          // Only show toast if this isn't the first load
-          const n = response.data[0];
-          toast.info(
-            <div>
-              <b>{n.title}</b>
-              <div>{n.message}</div>
-            </div>,
-            { autoClose: 5000 }
-          );
-        }
-        setLastNotificationId(response.data[0].id);
+      if (notificationsData.length > 0 && notificationsData[0].id !== lastNotificationIdRef.current && isInitializedRef.current) {
+        const n = notificationsData[0];
+        toast.info(
+          <div>
+            <b>{n.title}</b>
+            <div>{n.message}</div>
+          </div>,
+          { autoClose: 5000 }
+        );
       }
+      
+      if (notificationsData.length > 0) {
+        lastNotificationIdRef.current = notificationsData[0].id;
+      }
+      
+      isInitializedRef.current = true;
     } catch (error) {
       console.error('Error fetching notifications:', error);
     }
-  };
+  }, [currentUser?.id]);
 
-  const markAsRead = async (notificationId) => {
+  const markAsRead = useCallback(async (notificationId) => {
     try {
       await api.put(`/notifications/${notificationId}/read`);
       setNotifications(prevNotifications =>
@@ -65,21 +71,22 @@ export const NotificationProvider = ({ children }) => {
     } catch (error) {
       console.error('Error marking notification as read:', error);
     }
-  };
+  }, []);
 
-  const markAllAsRead = async () => {
+  const markAllAsRead = useCallback(async () => {
     try {
-      await api.put('/notifications/mark-all-read');
+      await api.put('/notifications/read-all');
       setNotifications(prevNotifications =>
         prevNotifications.map(notification => ({ ...notification, isRead: true }))
       );
       setUnreadCount(0);
+      await fetchNotifications(); // Re-fetch to ensure sync
     } catch (error) {
       console.error('Error marking all notifications as read:', error);
     }
-  };
+  }, [fetchNotifications]);
 
-  const setupSocket = () => {
+  const setupSocket = useCallback(() => {
     // Clean up existing socket if it exists
     if (socketRef.current) {
       socketRef.current.disconnect();
@@ -87,7 +94,6 @@ export const NotificationProvider = ({ children }) => {
     }
 
     if (!currentUser?.id) {
-      console.log('[DEBUG] No user found, skipping socket setup');
       return;
     }
 
@@ -111,6 +117,9 @@ export const NotificationProvider = ({ children }) => {
       console.log('[DEBUG] Socket connected successfully');
       setIsConnected(true);
       
+      // Expose socket to window for debugging
+      window.socket = socketInstance;
+      
       // Join user's room after connection
       socketInstance.emit('join', currentUser.id);
       console.log('[DEBUG] Emitted join event for user:', currentUser.id);
@@ -126,6 +135,11 @@ export const NotificationProvider = ({ children }) => {
       console.error('[ERROR] Socket connection error:', error);
       setIsConnected(false);
       
+      // Remove socket from window on error
+      if (window.socket === socketInstance) {
+        delete window.socket;
+      }
+      
       // If socket connection fails, fall back to polling
       if (!pollingIntervalRef.current) {
         pollingIntervalRef.current = setInterval(fetchNotifications, 30000); // Poll every 30 seconds
@@ -136,6 +150,11 @@ export const NotificationProvider = ({ children }) => {
       console.log('[DEBUG] Socket disconnected:', reason);
       setIsConnected(false);
       
+      // Remove socket from window on disconnect
+      if (window.socket === socketInstance) {
+        delete window.socket;
+      }
+      
       // Fall back to polling on disconnect
       if (!pollingIntervalRef.current) {
         pollingIntervalRef.current = setInterval(fetchNotifications, 30000);
@@ -143,8 +162,16 @@ export const NotificationProvider = ({ children }) => {
     });
 
     socketInstance.on('notification', (notification) => {
-      console.log('[DEBUG] Received notification:', notification);
-      setNotifications((prev) => [notification, ...prev]);
+      console.log('[DEBUG] Received real-time notification:', notification);
+      setNotifications((prev) => {
+        // Check if notification already exists to prevent duplicates
+        const exists = prev.some(n => n.id === notification.id);
+        if (exists) {
+          console.log('[DEBUG] Notification already exists, skipping duplicate');
+          return prev;
+        }
+        return [notification, ...prev];
+      });
       setUnreadCount((prev) => prev + 1);
       toast.info(
         <div>
@@ -155,8 +182,21 @@ export const NotificationProvider = ({ children }) => {
       );
     });
 
+    socketInstance.on('test_message', (data) => {
+      console.log('[DEBUG] Received test message:', data);
+    });
+
+    socketInstance.on('room_joined', (data) => {
+      console.log('[DEBUG] Room joined:', data);
+    });
+
+    socketInstance.on('error', (error) => {
+      console.error('[ERROR] Socket error:', error);
+      toast.error('Socket connection error');
+    });
+
     return socketInstance;
-  };
+  }, [currentUser?.id, fetchNotifications]);
 
   // Setup socket connection and fetch notifications when user changes
   useEffect(() => {
@@ -169,14 +209,13 @@ export const NotificationProvider = ({ children }) => {
       // Cleanup socket and polling on unmount
       if (socketRef.current) {
         socketRef.current.disconnect();
-        socketRef.current = null;
       }
       if (pollingIntervalRef.current) {
         clearInterval(pollingIntervalRef.current);
         pollingIntervalRef.current = null;
       }
     };
-  }, [currentUser?.id]); // Only re-run if user ID changes
+  }, [currentUser?.id, fetchNotifications, setupSocket]);
 
   const value = {
     notifications,

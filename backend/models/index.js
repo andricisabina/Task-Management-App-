@@ -23,6 +23,9 @@ PersonalTask.belongsTo(User, { foreignKey: 'userId' });
 User.hasMany(ProfessionalTask, { foreignKey: 'assignedToId' });
 ProfessionalTask.belongsTo(User, { as: 'assignedTo', foreignKey: 'assignedToId' });
 
+User.hasMany(ProfessionalTask, { foreignKey: 'assignedById' });
+ProfessionalTask.belongsTo(User, { as: 'assignedBy', foreignKey: 'assignedById' });
+
 User.hasMany(Comment, { foreignKey: 'userId' });
 Comment.belongsTo(User, { foreignKey: 'userId' });
 
@@ -48,6 +51,10 @@ Comment.belongsTo(ProfessionalTask, { foreignKey: 'taskId' });
 
 ProfessionalTask.hasMany(Attachment, { foreignKey: 'taskId' });
 Attachment.belongsTo(ProfessionalTask, { foreignKey: 'taskId' });
+
+// Add missing association between ProfessionalTask and Department
+ProfessionalTask.belongsTo(Department, { foreignKey: 'departmentId' });
+Department.hasMany(ProfessionalTask, { foreignKey: 'departmentId' });
 
 // Many-to-many relationship between Users and ProfessionalProjects
 const ProjectMember = sequelize.define('ProjectMember', {

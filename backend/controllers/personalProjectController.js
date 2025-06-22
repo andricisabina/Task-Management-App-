@@ -1,7 +1,8 @@
-const { PersonalProject, PersonalTask, sequelize, Notification } = require('../models');
+const { PersonalProject, PersonalTask, User, Notification } = require('../models');
 const asyncHandler = require('../middleware/asyncHandler');
 const ErrorResponse = require('../utils/errorResponse');
 const { Op } = require('sequelize');
+const { createNotificationWithEmission } = require('./notificationController');
 
 // @desc    Get all personal projects for a user
 // @route   GET /api/personal-projects
@@ -87,8 +88,7 @@ exports.updatePersonalProject = asyncHandler(async (req, res, next) => {
   if (req.body.status === 'completed' && prevStatus !== 'completed') {
     try {
       console.log('Attempting to create notification for completed project:', project.id, project.title);
-      const io = req.app.get('io');
-      const notification = await Notification.create({
+      await createNotificationWithEmission({
         userId: project.userId,
         title: 'Project Completed',
         message: `Your personal project "${project.title}" has been marked as completed.`,
@@ -96,9 +96,8 @@ exports.updatePersonalProject = asyncHandler(async (req, res, next) => {
         relatedId: project.id,
         relatedType: 'personal_project',
         link: `/projects/personal/${project.id}`
-      });
+      }, req);
       console.log('Notification created successfully');
-      io.to(`user_${project.userId}`).emit('notification', notification);
     } catch (err) {
       console.error('Failed to create notification:', err);
     }
