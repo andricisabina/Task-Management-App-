@@ -3,6 +3,7 @@ const asyncHandler = require('../middleware/asyncHandler');
 const ErrorResponse = require('../utils/errorResponse');
 const { Op } = require('sequelize');
 const { createNotificationWithEmission } = require('./notificationController');
+const sequelize = require('../config/sequelize');
 
 // @desc    Get all personal projects for a user
 // @route   GET /api/personal-projects
