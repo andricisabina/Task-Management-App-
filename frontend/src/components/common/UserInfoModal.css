@@ -1,0 +1,118 @@
+.user-info-modal .MuiDialog-paper {
+  border-radius: 12px !important;
+  min-height: 400px;
+}
+
+.user-info-modal .MuiDialogTitle-root {
+  border-bottom: 1px solid #e0e0e0;
+  padding-bottom: 16px;
+}
+
+.user-info-modal .MuiDialogContent-root {
+  padding: 24px !important;
+}
+
+.user-info-modal .user-avatar {
+  width: 80px;
+  height: 80px;
+  margin: 0 auto 16px;
+  font-size: 2rem;
+  background-color: #1976d2;
+}
+
+.user-info-modal .performance-metric-card {
+  text-align: center;
+  padding: 16px;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  transition: all 0.2s ease-in-out;
+}
+
+.user-info-modal .performance-metric-card:hover {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  transform: translateY(-1px);
+}
+
+.user-info-modal .performance-highlight {
+  margin-top: 24px;
+  padding: 16px;
+  border-radius: 8px;
+  border-left: 4px solid;
+}
+
+.user-info-modal .performance-highlight.success {
+  background-color: #e8f5e8;
+  border-left-color: #4caf50;
+  color: #2e7d32;
+}
+
+.user-info-modal .performance-highlight.error {
+  background-color: #ffebee;
+  border-left-color: #f44336;
+  color: #c62828;
+}
+
+.user-info-modal .performance-highlight.primary {
+  background-color: #e3f2fd;
+  border-left-color: #2196f3;
+  color: #1565c0;
+}
+
+.user-info-modal .performance-highlight.warning {
+  background-color: #fff3e0;
+  border-left-color: #ff9800;
+  color: #ef6c00;
+}
+
+.user-info-modal .clickable-card {
+  cursor: pointer;
+  transition: all 0.2s ease-in-out;
+}
+
+.user-info-modal .clickable-card:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  transform: translateY(-2px);
+  border-color: #1976d2;
+}
+
+.user-info-modal .user-details-section {
+  text-align: center;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.user-info-modal .user-contact-info {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.user-info-modal .user-contact-info svg {
+  color: #666;
+}
+
+.user-info-modal .metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+@media (max-width: 768px) {
+  .user-info-modal .MuiDialog-paper {
+    margin: 16px;
+    max-width: calc(100vw - 32px);
+  }
+  
+  .user-info-modal .metrics-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .user-info-modal .user-details-section {
+    margin-bottom: 24px;
+  }
+} 

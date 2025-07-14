@@ -76,10 +76,20 @@ const TaskDetails = () => {
     setIsModalOpen(true)
   }
 
-  const handleSaveTask = (taskData) => {
-    setTask({ ...task, ...taskData })
-    setIsModalOpen(false)
-    toast.success("Task updated successfully")
+  const handleSaveTask = async (taskData) => {
+    try {
+      let response;
+      if (type === 'professional') {
+        response = await tasksApi.updateProfessionalTask(task.id, taskData);
+      } else {
+        response = await tasksApi.updatePersonalTask(task.id, taskData);
+      }
+      setTask(response.data);
+      setIsModalOpen(false);
+      toast.success("Task updated successfully");
+    } catch (err) {
+      toast.error('Failed to update task: ' + (err.message || err));
+    }
   }
 
   const handleDeleteTask = () => {
@@ -496,8 +506,7 @@ const TaskDetails = () => {
       {isModalOpen && (
         <TaskModal
           task={task}
-          isProfessional={!!task.assignedTo}
-          teamMembers={task.assignedTo ? [task.assignedTo] : []}
+          type={type}
           onClose={() => setIsModalOpen(false)}
           onSave={handleSaveTask}
         />

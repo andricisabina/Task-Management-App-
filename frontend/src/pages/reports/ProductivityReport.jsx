@@ -33,6 +33,7 @@ import {
 import { toast } from 'react-toastify';
 import api from '../../services/api';
 import { BarChart2 } from "react-feather";
+import UserInfoModal from '../../components/common/UserInfoModal';
 
 // Register ChartJS components
 ChartJS.register(
@@ -57,6 +58,11 @@ const ProductivityReport = () => {
     startDate: '',
     endDate: '',
     format: 'json'
+  });
+  const [userModal, setUserModal] = useState({
+    open: false,
+    userData: null,
+    performanceType: null
   });
 
   const fetchProjects = async (scope) => {
@@ -114,6 +120,22 @@ const ProductivityReport = () => {
       // Reset projectId if scope changes
       ...(field === 'scope' ? { projectId: '' } : {})
     }));
+  };
+
+  const handleUserCardClick = (userData, performanceType) => {
+    setUserModal({
+      open: true,
+      userData,
+      performanceType
+    });
+  };
+
+  const handleCloseUserModal = () => {
+    setUserModal({
+      open: false,
+      userData: null,
+      performanceType: null
+    });
   };
 
   const isProjectScope = filters.scope === 'personal_project' || filters.scope === 'professional_project';
@@ -596,37 +618,105 @@ const ProductivityReport = () => {
                 ) : null}
                 {reportData.insights.performanceHighlights.mostProductiveUser ? (
                   <Grid item xs={12} sm={6} md={4}>
-                    <Paper variant="outlined" sx={{ p: 2, height: '100%' }}>
+                    <Paper 
+                      variant="outlined" 
+                      sx={{ 
+                        p: 2, 
+                        height: '100%',
+                        cursor: 'pointer',
+                        transition: 'all 0.2s ease-in-out',
+                        '&:hover': {
+                          boxShadow: 2,
+                          transform: 'translateY(-2px)',
+                          borderColor: 'primary.main'
+                        }
+                      }}
+                      onClick={() => handleUserCardClick(reportData.insights.performanceHighlights.mostProductiveUser, 'mostProductive')}
+                    >
                       <Typography variant="subtitle2" color="text.secondary">Most Productive User</Typography>
                       <Typography variant="body1" fontWeight="bold">{reportData.insights.performanceHighlights.mostProductiveUser.name}</Typography>
                       <Typography variant="caption" color="text.secondary">Avg. Efficiency Ratio: {reportData.insights.performanceHighlights.mostProductiveUser.avgEfficiencyRatio}</Typography>
+                      <Typography variant="caption" color="primary" sx={{ display: 'block', mt: 1 }}>
+                        Click to view details
+                      </Typography>
                     </Paper>
                   </Grid>
                 ) : null}
                 {reportData.insights.performanceHighlights.userWithMostTasks ? (
                   <Grid item xs={12} sm={6} md={4}>
-                    <Paper variant="outlined" sx={{ p: 2, height: '100%' }}>
+                    <Paper 
+                      variant="outlined" 
+                      sx={{ 
+                        p: 2, 
+                        height: '100%',
+                        cursor: 'pointer',
+                        transition: 'all 0.2s ease-in-out',
+                        '&:hover': {
+                          boxShadow: 2,
+                          transform: 'translateY(-2px)',
+                          borderColor: 'primary.main'
+                        }
+                      }}
+                      onClick={() => handleUserCardClick(reportData.insights.performanceHighlights.userWithMostTasks, 'mostTasks')}
+                    >
                       <Typography variant="subtitle2" color="text.secondary">User with Most Tasks</Typography>
                       <Typography variant="body1" fontWeight="bold">{reportData.insights.performanceHighlights.userWithMostTasks.name}</Typography>
                       <Typography variant="caption" color="text.secondary">{reportData.insights.performanceHighlights.userWithMostTasks.taskCount} tasks</Typography>
+                      <Typography variant="caption" color="primary" sx={{ display: 'block', mt: 1 }}>
+                        Click to view details
+                      </Typography>
                     </Paper>
                   </Grid>
                 ) : null}
                 {reportData.insights.performanceHighlights.leastProductiveUser ? (
                   <Grid item xs={12} sm={6} md={4}>
-                    <Paper variant="outlined" sx={{ p: 2, height: '100%' }}>
+                    <Paper 
+                      variant="outlined" 
+                      sx={{ 
+                        p: 2, 
+                        height: '100%',
+                        cursor: 'pointer',
+                        transition: 'all 0.2s ease-in-out',
+                        '&:hover': {
+                          boxShadow: 2,
+                          transform: 'translateY(-2px)',
+                          borderColor: 'primary.main'
+                        }
+                      }}
+                      onClick={() => handleUserCardClick(reportData.insights.performanceHighlights.leastProductiveUser, 'leastProductive')}
+                    >
                       <Typography variant="subtitle2" color="text.secondary">Least Productive User</Typography>
                       <Typography variant="body1" fontWeight="bold">{reportData.insights.performanceHighlights.leastProductiveUser.name}</Typography>
                       <Typography variant="caption" color="text.secondary">Avg. Efficiency Ratio: {reportData.insights.performanceHighlights.leastProductiveUser.avgEfficiencyRatio}</Typography>
+                      <Typography variant="caption" color="primary" sx={{ display: 'block', mt: 1 }}>
+                        Click to view details
+                      </Typography>
                     </Paper>
                   </Grid>
                 ) : null}
                 {reportData.insights.performanceHighlights.userWithMostRejections ? (
                   <Grid item xs={12} sm={6} md={4}>
-                    <Paper variant="outlined" sx={{ p: 2, height: '100%' }}>
+                    <Paper 
+                      variant="outlined" 
+                      sx={{ 
+                        p: 2, 
+                        height: '100%',
+                        cursor: 'pointer',
+                        transition: 'all 0.2s ease-in-out',
+                        '&:hover': {
+                          boxShadow: 2,
+                          transform: 'translateY(-2px)',
+                          borderColor: 'primary.main'
+                        }
+                      }}
+                      onClick={() => handleUserCardClick(reportData.insights.performanceHighlights.userWithMostRejections, 'mostRejections')}
+                    >
                       <Typography variant="subtitle2" color="text.secondary">User with Most Rejections</Typography>
                       <Typography variant="body1" fontWeight="bold">{reportData.insights.performanceHighlights.userWithMostRejections.name}</Typography>
                       <Typography variant="caption" color="text.secondary">{reportData.insights.performanceHighlights.userWithMostRejections.rejectionCount} rejections</Typography>
+                      <Typography variant="caption" color="primary" sx={{ display: 'block', mt: 1 }}>
+                        Click to view details
+                      </Typography>
                     </Paper>
                   </Grid>
                 ) : null}
@@ -776,6 +866,14 @@ const ProductivityReport = () => {
           </Paper>
         </>
       )}
+
+      {/* User Info Modal */}
+      <UserInfoModal
+        open={userModal.open}
+        onClose={handleCloseUserModal}
+        userData={userModal.userData}
+        performanceType={userModal.performanceType}
+      />
     </div>
   );
 };

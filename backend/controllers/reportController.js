@@ -5,6 +5,12 @@ const { Op } = require('sequelize');
 
 const getReportData = async (req, res) => {
   try {
+    // Helper to extract just the filename from a path
+    const getProfilePhotoFilename = (profilePhoto) => {
+      if (!profilePhoto) return null;
+      const parts = profilePhoto.split('/');
+      return parts[parts.length - 1];
+    };
     const {
       scope,
       projectId,
@@ -318,7 +324,7 @@ const getReportData = async (req, res) => {
             { 
               model: User, 
               as: 'assignedTo',
-              attributes: ['name', 'email'] 
+              attributes: ['id', 'name', 'email', 'profilePhoto'] 
             },
             {
               model: User,
@@ -367,7 +373,7 @@ const getReportData = async (req, res) => {
         const allProjectTasks = await ProfessionalTask.findAll({ 
           where: { projectId: projectId },
           include: [
-            { model: User, as: 'assignedTo', attributes: ['id', 'name'], required: false },
+            { model: User, as: 'assignedTo', attributes: ['id', 'name', 'email', 'profilePhoto'], required: false },
             { model: Department, attributes: ['id', 'name'], required: false }
           ]
         });
@@ -516,16 +522,61 @@ const getReportData = async (req, res) => {
         const userTaskCounts = {};
         const userRejectionCounts = {};
 
+        // Get detailed user information for performance highlights
+        const userIds = [...new Set(allProjectTasks.map(task => task.assignedToId).filter(Boolean))];
+        const userDetails = await User.findAll({
+          where: { id: { [Op.in]: userIds } },
+          attributes: ['id', 'name', 'email', 'role', 'profilePhoto', 'lastLogin', 'departmentId'],
+          include: [{
+            model: Department,
+            attributes: ['name'],
+            required: false
+          }]
+        });
+
+        // Fetch project roles for all users in the project
+        const projectMembers = await ProjectMember.findAll({
+          where: { projectId },
+          attributes: ['userId', 'role']
+        });
+        const projectRolesMap = {};
+        projectMembers.forEach(pm => {
+          projectRolesMap[pm.userId] = pm.role;
+        });
+
+        const userDetailsMap = {};
+        userDetails.forEach(user => {
+          userDetailsMap[user.id] = {
+            id: user.id,
+            name: user.name,
+            email: user.email,
+            role: user.role,
+            projectRole: projectRolesMap[user.id] || null,
+            profilePhoto: getProfilePhotoFilename(user.profilePhoto),
+            lastLogin: user.lastLogin,
+            department: user.Department?.name
+          };
+        });
+
         allProjectTasks.forEach(task => {
           if (!task.assignedToId || !task.assignedTo) return;
           const userId = task.assignedToId;
           const userName = task.assignedTo.name;
+          const userDetail = userDetailsMap[userId];
 
-          if (!userTaskCounts[userId]) userTaskCounts[userId] = { count: 0, name: userName };
+          if (!userTaskCounts[userId]) userTaskCounts[userId] = { 
+            count: 0, 
+            name: userName,
+            ...userDetail
+          };
           userTaskCounts[userId].count++;
           
           if (task.status === 'rejected') {
-            if (!userRejectionCounts[userId]) userRejectionCounts[userId] = { count: 0, name: userName };
+            if (!userRejectionCounts[userId]) userRejectionCounts[userId] = { 
+              count: 0, 
+              name: userName,
+              ...userDetail
+            };
             userRejectionCounts[userId].count++;
           }
         });
@@ -534,8 +585,14 @@ const getReportData = async (req, res) => {
           if (!task.assignedToId || !task.assignedTo) return;
           const userId = task.assignedToId;
           const userName = task.assignedTo.name;
+          const userDetail = userDetailsMap[userId];
           const efficiencyRatio = task.actualTime / task.estimatedTime;
-          if (!userProductivity[userId]) userProductivity[userId] = { totalRatio: 0, count: 0, name: userName };
+          if (!userProductivity[userId]) userProductivity[userId] = { 
+            totalRatio: 0, 
+            count: 0, 
+            name: userName,
+            ...userDetail
+          };
           userProductivity[userId].totalRatio += efficiencyRatio;
           userProductivity[userId].count++;
         });
@@ -550,11 +607,35 @@ const getReportData = async (req, res) => {
 
             if (avgRatio < minUserAvgRatio) {
               minUserAvgRatio = avgRatio;
-              mostProductiveUser = { name: user.name, avgEfficiencyRatio: parseFloat(avgRatio.toFixed(2)) };
+              mostProductiveUser = { 
+                id: userId,
+                name: user.name,
+                email: user.email,
+                role: user.role,
+                projectRole: user.projectRole,
+                profilePhoto: user.profilePhoto,
+                lastLogin: user.lastLogin,
+                department: user.department,
+                avgEfficiencyRatio: parseFloat(avgRatio.toFixed(2)),
+                taskCount: user.count,
+                rejectionCount: userRejectionCounts[userId]?.count || 0
+              };
             }
             if (avgRatio > maxUserAvgRatio) {
               maxUserAvgRatio = avgRatio;
-              leastProductiveUser = { name: user.name, avgEfficiencyRatio: parseFloat(avgRatio.toFixed(2)) };
+              leastProductiveUser = { 
+                id: userId,
+                name: user.name,
+                email: user.email,
+                role: user.role,
+                projectRole: user.projectRole,
+                profilePhoto: user.profilePhoto,
+                lastLogin: user.lastLogin,
+                department: user.department,
+                avgEfficiencyRatio: parseFloat(avgRatio.toFixed(2)),
+                taskCount: user.count,
+                rejectionCount: userRejectionCounts[userId]?.count || 0
+              };
             }
           }
           // Prevent showing the same user as most and least productive if only one user has data
@@ -568,7 +649,17 @@ const getReportData = async (req, res) => {
           for (const userId in userTaskCounts) {
             if (userTaskCounts[userId].count > maxTasks) {
               maxTasks = userTaskCounts[userId].count;
-              userWithMostTasks = { name: userTaskCounts[userId].name, taskCount: maxTasks };
+              userWithMostTasks = { 
+                id: userId,
+                name: userTaskCounts[userId].name,
+                email: userTaskCounts[userId].email,
+                role: userTaskCounts[userId].role,
+                profilePhoto: userTaskCounts[userId].profilePhoto,
+                lastLogin: userTaskCounts[userId].lastLogin,
+                department: userTaskCounts[userId].department,
+                taskCount: maxTasks,
+                rejectionCount: userRejectionCounts[userId]?.count || 0
+              };
             }
           }
         }
@@ -578,7 +669,16 @@ const getReportData = async (req, res) => {
           for (const userId in userRejectionCounts) {
             if (userRejectionCounts[userId].count > maxRejections) {
               maxRejections = userRejectionCounts[userId].count;
-              userWithMostRejections = { name: userRejectionCounts[userId].name, rejectionCount: maxRejections };
+              userWithMostRejections = { 
+                id: userId,
+                name: userRejectionCounts[userId].name,
+                email: userRejectionCounts[userId].email,
+                role: userRejectionCounts[userId].role,
+                profilePhoto: userRejectionCounts[userId].profilePhoto,
+                lastLogin: userRejectionCounts[userId].lastLogin,
+                department: userRejectionCounts[userId].department,
+                rejectionCount: maxRejections
+              };
             }
           }
         }
